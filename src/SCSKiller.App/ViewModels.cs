@@ -25,6 +25,10 @@ public abstract class Bindable : INotifyPropertyChanged
 static class Fmt
 {
     public static string N(long? n) => n?.ToString("N0") ?? Format.Dash;
+    public static string Duration(TimeSpan? t) => t is not { } d ? Format.Dash
+        : d.TotalMinutes < 1 ? $"{Math.Max(1, (int)d.TotalSeconds)} 秒"
+        : d.TotalHours < 1 ? $"{(int)Math.Round(d.TotalMinutes)} 分钟"
+        : $"{(int)d.TotalHours} 小时" + (d.Minutes > 0 ? $" {d.Minutes} 分钟" : "");
     /// <summary>"today at 20:14", "yesterday at 20:14", else "on 26/09/2026" (the culture's short date).</summary>
     public static string When(DateTimeOffset at)
     {
@@ -128,26 +132,7 @@ static class Fmt
         _ => note,
     };
 
-    public static string RecorderRefused(string reason)
-    {
-        if (reason == ScsKiller.NeverSawNote)
-            return "上次启动时录制器未加载；目前无法判断是游戏、反作弊还是其他工具的加载顺序造成。";
-        if (reason == ScsKiller.GameChangedNote)
-            return "游戏文件发生变化，录制器已重新设置；请再次启动。";
-        if (reason.StartsWith("The last launch ran ", StringComparison.Ordinal))
-            return "上次启动运行了与录制器设置时不同的执行文件；现已重新设置，请再次启动。";
-        const string prefix = "The last launch wasn't recorded: ";
-        if (!reason.StartsWith(prefix, StringComparison.Ordinal)) return reason;
-        var code = reason[prefix.Length..].TrimEnd('.');
-        return code switch
-        {
-            "anti-cheat next to the exe" => "代理检测到执行文件旁的反作弊组件，因此拒绝录制。",
-            "anti-cheat client loaded" => "代理检测到已加载的反作弊客户端，因此拒绝录制。",
-            "Riot Games install" => "代理检测到 Riot Games 安装目录，因此拒绝录制。",
-            "markers= malformed" => "代理的反作弊标记清单格式无效，因此拒绝录制。",
-            _ => $"代理拒绝录制（原因代码：{code}）。",
-        };
-    }
+    public static string RecorderRefused(string reason) => Format.RecorderRefused(reason);
 }
 
 /// <summary>Folds a burst of Core events into one run on the UI thread: a scan raises GameChanged once per game (62 at
@@ -314,7 +299,7 @@ public sealed class GameRow(GameState s, bool queued = false, bool compiling = f
     public string Cache => Fmt.Cache(s);
     public string? CacheTip => Fmt.CacheTip(s);
     public Style CacheStyle => Fmt.Style(CacheTip != null ? "Secondary" : "BodyTextBlockStyle");
-    public string Time => Format.Duration(Fmt.CompileTime(s));
+    public string Time => Fmt.Duration(Fmt.CompileTime(s));
 
     bool Partly => ScsKiller.IsPartlyWarmed(s);
     bool PartlyCompiled => ScsKiller.IsPartlyCompiled(s);
@@ -336,17 +321,17 @@ public sealed class GameRow(GameState s, bool queued = false, bool compiling = f
     /// <summary>The whole reason: the row's tooltip and the game page's status text.</summary>
     public string FullNote => s.Status switch
     {
-        _ when s.CompileUnreached || PartlyCompiled => s.StatusReason,
+        _ when s.CompileUnreached || PartlyCompiled => Format.Reason(s),
         GameStatus.Warmed when Partly => $"驱动 {s.WarmedDriverVersion} · 首次启动仍编译了 {s.Careful!.LaunchCompiled * 100:0}%",
         GameStatus.Warmed => $"驱动 {s.WarmedDriverVersion}" + (ScsKiller.IsPartial(s.Plan) ? " · 录制后可编译其余部分"
             : ScsKiller.RtAfterRecording(s) ? " · 光线追踪还需要约 5 分钟录制" : ""),
         _ when ScsKiller.NeedsOfflineSession(s) => $"检测到 {Fmt.AntiCheatName(s.AntiCheat)}。可使用离线会话录制，或在游戏详情中确认风险后选择直接录制。",
         _ when s.ReasonFlags.HasFlag(GameReasonFlags.AntiCheatRecordingBlocked) => $"需要录制，但检测到 {Fmt.AntiCheatName(s.AntiCheat)}。请在详情页阅读风险说明并决定是否允许直接录制。",
         GameStatus.NeedsRecording when s.AntiCheat != AntiCheat.None && !s.AntiCheatRecordingAllowed => $"检测到 {Fmt.AntiCheatName(s.AntiCheat)}；可在详情页确认风险后选择录制",
-        GameStatus.NeedsRecording when s.RecordingPaused => ScsKiller.PausedNote(App.Core.Settings),
+        GameStatus.NeedsRecording when s.RecordingPaused => Format.Reason(s),
         GameStatus.NeedsRecording when ScsKiller.NeverRecorded(s) => Fmt.RecorderRefused(s.RecorderRefused!),
         GameStatus.NeedsRecording when s.RecorderInstalled && !ScsKiller.RecordedEnough(s) => Format.RecorderOnNote(s),
-        _ => s.StatusReason,
+        _ => Format.Reason(s),
     } + Format.ModNote(s);
     /// <summary>The row's note under the status: a few words (<see cref="Format.ShortNote"/>); null when the status says it all.</summary>
     public string? Note => s.ReasonFlags.HasFlag(GameReasonFlags.AntiCheatRecordingBlocked) ? "可在详情页选择" : Format.ShortNote(s);
@@ -375,7 +360,7 @@ public sealed class GameRow(GameState s, bool queued = false, bool compiling = f
     public bool IsWhy => s.Status == GameStatus.Unsupported && !s.ReasonFlags.HasFlag(GameReasonFlags.AntiCheatRecordingBlocked);
     public bool IsEncrypted => s.Engine?.Encrypted == true;
     public string Reason => s.ReasonFlags.HasFlag(GameReasonFlags.AntiCheatRecordingBlocked)
-        ? $"检测到 {Fmt.AntiCheatName(s.AntiCheat)}。请在游戏详情中阅读风险说明并决定是否录制。" : s.StatusReason;
+        ? $"检测到 {Fmt.AntiCheatName(s.AntiCheat)}。请在游戏详情中阅读风险说明并决定是否录制。" : Format.Reason(s);
 
     // Play goes through the store (a game the user added: its exe); never for an anti-cheat game (SCSKiller never launches them)
     public bool CanLaunch { get; } = s.AntiCheat == AntiCheat.None && StoreLaunch.Supported(s.Game);
@@ -495,7 +480,7 @@ public sealed class LibraryVm : Bindable
         Scanning = slowScan = false;
         Refresh();
         if (userRequested && Error == null && App.Core is ScsKiller k)
-            RefreshNote = await k.ServerRefresh switch
+            RefreshNote = k.ContentRoutes == null ? "已刷新本地游戏库；本 fork 暂未启用在线规则更新。" : await k.ServerRefresh switch
             {
                 ScsKiller.ServerCheck.TooSoon => "几分钟前刚检查过服务器。",
                 ScsKiller.ServerCheck.Unreachable => "无法连接 SCSKiller 服务器，列表保持原样。",
@@ -646,30 +631,30 @@ public sealed class DetailVm(string id) : Bindable
     public string StatusTitle => Row.StatusText;
     public string StatusReason => Sentence(s.Status switch
     {
-        _ when s.CompileUnreached => s.StatusReason + (s.WarmedAt != null ? ". " + Sentence(ScsKiller.ClearForGameNote) : ""),
-        _ when ScsKiller.IsPartlyCompiled(s) => ScsKiller.RefusedNote(s) + ". An SCSKiller update could fix it",
-        GameStatus.Warmed when ScsKiller.IsPartlyWarmed(s) => s.StatusReason,
-        GameStatus.Warmed => $"compiled for {(ScsKiller.BothApis(s.Plan) ? "DirectX 11 and DirectX 12, for " : "")}driver {s.WarmedDriverVersion}" + (s.WarmedAt is { } t ? $" on {t.LocalDateTime:d}" : "")
-            + (RtAfter ? ". " + Sentence(ScsKiller.RtAfterRecordingNote) : ""),
+        _ when s.CompileUnreached => "编译结果未进入游戏使用的缓存" + (s.WarmedAt != null ? "。可清空此游戏的缓存后重试" : ""),
+        _ when ScsKiller.IsPartlyCompiled(s) => $"驱动跳过了 {Failed + Crashed:N0} 条管线，首次在游戏中使用时仍可能卡顿。后续 SCSKiller 更新可能改善此问题",
+        GameStatus.Warmed when ScsKiller.IsPartlyWarmed(s) => Format.Reason(s),
+        GameStatus.Warmed => $"已为{(ScsKiller.BothApis(s.Plan) ? " DirectX 11 和 DirectX 12、" : "")}驱动 {s.WarmedDriverVersion} 编译" + (s.WarmedAt is { } t ? $"（{t.LocalDateTime:d}）" : "")
+            + (RtAfter ? "。光追效果仍需要录制" : ""),
         // a cache here: played since a clear or a stopped compile; then the planner's note when the row has one to say
-        GameStatus.Ready => (s.CacheOnDisk > 0 ? $"not fully compiled yet: {Format.Bytes(s.CacheOnDisk)} of it is in the driver cache"
-            : s.LastWarmTime == null ? "not compiled yet" : "its shader cache is empty: compile it again")
-            + (Row.Note != null ? ". " + Sentence(s.StatusReason) : ""),
-        GameStatus.NeedsRecording => HasDbTeaser ? Row.FullNote.Replace("; " + ScsKiller.InDbNote, "") : Row.FullNote,   // the teaser says it
+        GameStatus.Ready => (s.CacheOnDisk > 0 ? $"尚未完整编译：驱动缓存中已有 {Format.Bytes(s.CacheOnDisk)}"
+            : s.LastWarmTime == null ? "尚未编译" : "着色器缓存已清空，请重新编译")
+            + (Row.Note != null ? "。" + Row.Note : ""),
+        GameStatus.NeedsRecording => HasDbTeaser ? Format.Reason(s with { InCommunityDb = null }) + Format.ModNote(s) : Row.FullNote,   // the teaser says it
         GameStatus.Unsupported when s.ReasonFlags.HasFlag(GameReasonFlags.AntiCheatRecordingBlocked)
             => $"需要录制，但检测到 {Fmt.AntiCheatName(s.AntiCheat)}。可在下方确认风险后选择直接录制。",
-        _ => HasDbTeaser ? s.StatusReason.Replace("; " + ScsKiller.InDbNote, "") : s.StatusReason,
+        _ => Format.Reason(s),
     } + (s.Status == GameStatus.NeedsRecording ? "" : Format.ModNote(s)))   // FullNote has it
-        + (IsPartlyCompiled || s.CompileUnreached ? "." : "");
+        + (IsPartlyCompiled || s.CompileUnreached ? "。" : "");
     public bool IsPartlyCompiled => ScsKiller.IsPartlyCompiled(s);
-    public const string PartlyCompiledWhy = "SCSKiller compiled this game, but the graphics driver refused a large part of it. This happens when the driver or Windows can't build pipelines the way the game does. The refused ones are built by the game the first time it needs them, which is when they can stutter. SCSKiller compiles them again after a driver update.";
+    public const string PartlyCompiledWhy = "SCSKiller 已尝试编译此游戏，但显卡驱动拒绝了其中一部分管线。这可能是因为驱动或 Windows 无法按游戏使用的方式创建管线。被拒绝的管线会在游戏首次使用时自行编译，届时仍可能卡顿。更新驱动后，SCSKiller 会重新尝试编译。";
 
     // The manifest is public: a PC without "db" sees that the community database covers the game, and where to get it.
     // Shown, it is the page's only mention of the database.
     public bool HasDbTeaser => s is { InCommunityDb: true, Community: null } && !App.Account.HasDb
         && (s.Status == GameStatus.NeedsRecording || RtAfter || s.ReasonFlags.HasFlag(GameReasonFlags.AntiCheatRecordingBlocked));
-    public string DbTeaser => $"In the community database: {s.CommunityDbPsos:N0} pipeline{(s.CommunityDbPsos == 1 ? "" : "s")} recorded by other players. Patreon supporters compile them without recording.";
-    public string DbTeaserLink => App.Account.SignedIn ? "Patreon membership" : "Sign in with Patreon";
+    public string DbTeaser => $"上游社区数据库中，其他玩家已录制 {s.CommunityDbPsos:N0} 条管线。Patreon 支持者可直接使用这些数据编译。";
+    public string DbTeaserLink => App.Account.SignedIn ? "上游 Patreon 会员资格" : "通过上游 Patreon 登录";
     public bool CanCompile => s.Status is GameStatus.Ready or GameStatus.Warmed or GameStatus.Stale || RtPartial;
     public string? GuessNote => s.Engine is { } e && s.Status is GameStatus.Ready or GameStatus.Warmed or GameStatus.Stale ? ScsKiller.GuessNote(e) : null;
     public bool HasGuessNote => GuessNote != null;
@@ -697,10 +682,10 @@ public sealed class DetailVm(string id) : Bindable
     public bool? CarefulPending { get; set; }
     public bool CarefulOn => CarefulPending ?? s.Careful?.On == true;
     public bool CanToggleCareful => CarefulPending == null && !Queued;
-    public string CarefulNote => (s.Careful is { Recorded: 0 } ? "Compiles the pipelines recorded in the game in passes on few threads, so the driver keeps more of them. This game has no recording yet, so there is nothing to compile carefully."
-        : $"Compiles the pipelines recorded in the game in passes on {ScsKiller.AmdCarefulThreads} threads, so the driver keeps more of them; the rest at full speed."
-          + (s.Careful?.Estimate is { } est ? $" About {Format.Duration(est)}" + (s.Careful.On || Fmt.CompileTime(s) is not { } fast ? "." : $" instead of {Format.Duration(fast)}.") : ""))
-        + (s.Careful?.LaunchCompiled is { } lc ? $" After the last compile, the game's first launch still compiled {lc * 100:0}% of its pipelines." : "");
+    public string CarefulNote => (s.Careful is { Recorded: 0 } ? "分批使用少量线程编译游戏中录制的管线，让驱动保留更多缓存。此游戏尚无录制数据，暂时没有可谨慎编译的内容。"
+        : $"分批使用 {ScsKiller.AmdCarefulThreads} 个线程编译游戏中录制的管线，让驱动保留更多缓存；其余管线仍以全速编译。"
+          + (s.Careful?.Estimate is { } est ? $" 预计耗时 {Fmt.Duration(est)}" + (s.Careful.On || Fmt.CompileTime(s) is not { } fast ? "。" : $"，普通编译约需 {Fmt.Duration(fast)}。") : ""))
+        + (s.Careful?.LaunchCompiled is { } lc ? $" 上次编译后，游戏首次启动仍自行编译了 {lc * 100:0}% 的管线。" : "");
     // Windows' shader cache of the game, read off the UI thread: Clear cache clears it too, so it can be the only cache to clear.
     BackgroundRead<long>? otherCaches;
     long otherBytes;
@@ -713,9 +698,9 @@ public sealed class DetailVm(string id) : Bindable
     public bool HasCache => s.CacheOnDisk != null || otherBytes > 0 || s.Status is GameStatus.Warmed or GameStatus.Stale;
     public bool ShowClearCache => HasCache || CanCompile;
     // the driver cache, as Disk space shows it; the dialog lists Windows' cache with its own size
-    public string ClearCacheText => s.CacheOnDisk != null ? $"Clear cache ({DiskValue})" : "Clear cache";
-    public string ClearCacheTip => HasCache ? "Deletes this game's shader caches (the driver's and Windows', and the game's own if you choose) so its next run starts cold"
-        : "SCSKiller learns this game's driver cache files the first time it compiles it or sees it running";
+    public string ClearCacheText => s.CacheOnDisk != null ? $"清空缓存（{DiskValue}）" : "清空缓存";
+    public string ClearCacheTip => HasCache ? "删除此游戏的着色器缓存（驱动和 Windows 缓存；可选择连游戏自带缓存一起删除），下次启动将重新生成"
+        : "SCSKiller 首次编译此游戏或检测到其运行时，会识别对应的驱动缓存文件";
 
     public bool IsKnownStutter => s.KnownStutter != null;
     public string StutterReason => s.KnownStutter?.Reason ?? "";
@@ -723,23 +708,23 @@ public sealed class DetailVm(string id) : Bindable
     public string NoStutterReason => s.NoStutter ?? "";
     /// <summary>The source as a link when it's a URL; otherwise <see cref="StutterCitation"/> shows it as text.</summary>
     public Uri? StutterUri => Uri.TryCreate(s.KnownStutter?.Source, UriKind.Absolute, out var u) && u.Scheme is "http" or "https" ? u : null;
-    public string StutterLinkText => StutterUri != null ? $"Source ({s.KnownStutter!.Date})" : "";
-    public string StutterCitation => s.KnownStutter is { } k && StutterUri == null ? $"Source: {k.Source} ({k.Date})" : "";
-    public string EngineChip => s.Engine is { } e ? Format.Engine(e, e.Family == "Unreal" ? "Unreal Engine" : null) + Fmt.Guessed(e) + (e.Fork != null ? " · custom fork" : "") : "Unknown engine";
+    public string StutterLinkText => StutterUri != null ? $"来源（{s.KnownStutter!.Date}）" : "";
+    public string StutterCitation => s.KnownStutter is { } k && StutterUri == null ? $"来源：{k.Source}（{k.Date}）" : "";
+    public string EngineChip => s.Engine is { } e ? Format.Engine(e, e.Family == "Unreal" ? "Unreal Engine" : null) + Fmt.Guessed(e) + (e.Fork != null ? " · 定制分支" : "") : "未知引擎";
     public string ApiChip => s.Engine?.GraphicsApi.Replace("D3D", "DirectX ") ?? "";
     public bool HasApi => ApiChip.Length > 0;
-    public string AntiCheatChip => NoAntiCheat ? "No anti-cheat" : Fmt.AntiCheatName(s.AntiCheat);
+    public string AntiCheatChip => NoAntiCheat ? "未检测到反作弊" : Fmt.AntiCheatName(s.AntiCheat);
     public string AntiCheatTip => NoAntiCheat ? "未发现反作弊：可以录制此游戏"
         : $"检测到 {Fmt.AntiCheatName(s.AntiCheat)}。在下方明确确认风险后，可选择启用录制；游戏仍可能拒绝注入或封禁账号。";
     public bool HasMiddleware => s.Middleware is { Count: > 0 };
     IReadOnlyList<MiddlewareTag> Mw => s.Middleware ?? [];
     /// <summary>"Also compiles" only names tags with known pipelines (and DLSS, by the driver); else what was detected.</summary>
     public string MiddlewareChip => Mw.Where(t => t.Pipelines > 0).Select(t => t.Label)
-            .Concat(Mw.Any(t => t.Label == "DLSS") ? ["DLSS (by the driver)"] : []).ToList() is { Count: > 0 } also
-        ? "Also compiles: " + string.Join(" · ", also) : "Detected: " + string.Join(" · ", Mw.Select(t => t.Label));
-    public string MiddlewareTip => "Upscaler DLLs next to the game. Their pipelines are compiled with it once a recording of any game has seen that DLL version"
-        + ": on this PC, or for FSR and XeSS on any PC that shares them"
-        + (s.Plan is { MiddlewareItems: > 0 } p ? $" (this plan: {Fmt.N(p.MiddlewareItems)} of theirs)" : "") + ".\n\n"
+            .Concat(Mw.Any(t => t.Label == "DLSS") ? ["DLSS（由驱动编译）"] : []).ToList() is { Count: > 0 } also
+        ? "同时编译：" + string.Join(" · ", also) : "已检测到：" + string.Join(" · ", Mw.Select(t => t.Label));
+    public string MiddlewareTip => "游戏目录中的超分辨率组件 DLL。任意游戏的录制识别该 DLL 版本后，就能随游戏一起编译其管线"
+        + "；本机录制可识别，FSR 和 XeSS 也可使用其他玩家分享的数据"
+        + (s.Plan is { MiddlewareItems: > 0 } p ? $"（本次计划包含 {Fmt.N(p.MiddlewareItems)} 条）" : "") + "。\n\n"
         + string.Join("\n", Mw.Select(Fmt.TagTip));
 
     // The one tip left: a game that can't compile before a recording, or not its ray tracing (a plan's other gaps are the
@@ -747,10 +732,10 @@ public sealed class DetailVm(string id) : Bindable
     public bool HasRecordTip => CanRecord && (s.Status == GameStatus.NeedsRecording || RtAfter) && !RecordOn && !s.RecorderEffective && s.NoStutter == null;
     bool Enough => ScsKiller.RecordedEnough(s);
     public string RecordTipTitle => Enough ? "继续录制游玩过程" : "录制约 5 分钟游玩过程";
-    public string RecordTip => RtPartial || RtAfter ? $"Turn on recording and play with ray tracing on{(Enough ? "" : " for about 5 minutes")}. " + ScsKiller.RtWhy(App.Core.Vendor.Caps, s.Engine)
-            + (RtAfter ? " Everything else is compiled." : " Everything else compiles from the game files already.")
-        : Enough ? Sentence(s.StatusReason) + "."
-        : "Turn on recording and play as usual for about 5 minutes. SCSKiller learns this game's shader layout from it, then it can compile.";
+    public string RecordTip => RtPartial || RtAfter ? $"开启录制并启用光线追踪游玩{(Enough ? "" : "约 5 分钟")}。" + ScsKiller.RtWhy(App.Core.Vendor.Caps, s.Engine)
+            + (RtAfter ? "其他部分已编译。" : "其他部分已经可以从游戏文件编译。")
+        : Enough ? "继续开启录制并游玩，让 SCSKiller 收集尚缺的管线。"
+        : "开启录制并正常游玩约 5 分钟。SCSKiller 会据此识别游戏的着色器布局，随后即可编译。";
     public bool ShowRecordAction => !RecordOn && !s.RecorderEffective && CanToggleRecord;
 
     // Shader coverage (PlanStats), in words: how much of what the planner found gets compiled, where it comes from, what's
@@ -766,14 +751,14 @@ public sealed class DetailVm(string id) : Bindable
     public bool LowCoverage => !s.CompileUnreached && (Pct is { } pct ? pct < 90 : Partial);   // more than 10% left out, like ScsKiller.IsPartial (the test for a plan without the count)
     public bool GoodCoverage => HasMeter && !LowCoverage;
     bool Dx11Only => P is { StageSets: 0, Generated: 0, D3D11Shaders: > 0 };
-    public string CoverageHeadline => P == null ? "Known once its first compile starts"
-        : s.CompileUnreached ? "Its compile isn't used by this game"
-        : StalePct is { } part ? $"About {part}% of its plan is compiled; compiling again adds the rest"
-        : CompiledPct is { } done ? $"The driver compiled about {done}% of the plan's pipelines"
-        : Dx11Only ? (Compiled ? "Covers" : "Will cover") + " every DirectX 11 shader in the game files"
-        : Pct is not { } pct ? "Measured again on the next compile"
-        : (s.Status == GameStatus.Stale ? s.NewPipelines > 0 ? "Its new plan covers" : "Its last plan covered" : Compiled ? "Covers" : "Will cover")
-          + (pct == 100 ? " all the shader combinations found in this game" : $" about {pct}% of the shader combinations found in this game");
+    public string CoverageHeadline => P == null ? "首次编译开始后即可得知覆盖情况"
+        : s.CompileUnreached ? "编译结果未被此游戏使用"
+        : StalePct is { } part ? $"已编译计划中约 {part}% 的管线；重新编译可加入其余部分"
+        : CompiledPct is { } done ? $"驱动已编译计划中约 {done}% 的管线"
+        : Dx11Only ? (Compiled ? "已覆盖" : "将覆盖") + "游戏文件中的全部 DirectX 11 着色器"
+        : Pct is not { } pct ? "下次编译时重新测量"
+        : (s.Status == GameStatus.Stale ? s.NewPipelines > 0 ? "新计划覆盖" : "上次计划覆盖" : Compiled ? "已覆盖" : "将覆盖")
+          + (pct == 100 ? "此游戏已发现的全部着色器组合" : $"此游戏已发现的约 {pct}% 着色器组合");
     bool Rt => ScsKiller.NeedsRtRecording(s);
     bool RtUnseen => s.RtUnseen;
     bool RtInline => ScsKiller.RtInlineCovers(P);
@@ -783,24 +768,24 @@ public sealed class DetailVm(string id) : Bindable
     /// and without one the community database's status is its own row. Ray tracing: covered or what it needs.</summary>
     public IReadOnlyList<DetailRow> Sources => P is not { } p ? [] : new DetailRow?[]
     {
-        p.Generated > 0 ? new(ScsKiller.BothApis(p) ? "DirectX 12, from the game files" : "Found in the game files", Fmt.N(p.Generated)) : null,
+        p.Generated > 0 ? new(ScsKiller.BothApis(p) ? "DirectX 12：来自游戏文件" : "来自游戏文件", Fmt.N(p.Generated)) : null,
         p.Recorded > 0 ? new(s.Community switch
         {
-            null => "Your play recordings",
-            { WithLocalRecording: true } => "Your recording and the community database",
-            _ => "The community database",
+            null => "本机游玩录制",
+            { WithLocalRecording: true } => "本机录制与上游社区数据库",
+            _ => "上游社区数据库",
         }, Fmt.N(p.Recorded), CommunityLine) : null,
-        s.Community == null && s.InCommunityDb is { } inDb && !HasDbTeaser ? new("The community database", inDb ? "has a recording for this version" : "not in it yet") : null,
-        p.MiddlewareItems > 0 ? new(p.MiddlewareSharedItems == 0 ? "Its upscalers, learned from recordings"
-            : p.MiddlewareSharedItems == p.MiddlewareItems ? "Its upscalers, from shared packs" : "Its upscalers, from recordings and shared packs", Fmt.N(p.MiddlewareItems)) : null,
-        p.D3D11Shaders > 0 ? new(ScsKiller.BothApis(p) ? "DirectX 11, from the game files" : "DirectX 11 shaders", Fmt.N(p.D3D11Shaders)) : null,
-        p.RtLibraries > 0 ? new("Ray-traced effects", s.Engine?.NoRayTracing == true ? "off in this game" : s.Engine?.NoRtPipelines == true ? "inline, from the game files" : p.RtUncovered == 0 ? "covered" : s.RtToPlan ? "being checked" : RtUnseen ? "not seen while recording" : RtInline ? "inline ones covered" : !Rt ? "mostly covered" : CanRecord ? "need a recording" : "not compiled") : null,
+        s.Community == null && s.InCommunityDb is { } inDb && !HasDbTeaser ? new("上游社区数据库", inDb ? "已有此版本的录制数据" : "尚无此版本的数据") : null,
+        p.MiddlewareItems > 0 ? new(p.MiddlewareSharedItems == 0 ? "超分辨率组件：来自录制"
+            : p.MiddlewareSharedItems == p.MiddlewareItems ? "超分辨率组件：来自共享数据包" : "超分辨率组件：来自录制与共享数据包", Fmt.N(p.MiddlewareItems)) : null,
+        p.D3D11Shaders > 0 ? new(ScsKiller.BothApis(p) ? "DirectX 11：来自游戏文件" : "DirectX 11 着色器", Fmt.N(p.D3D11Shaders)) : null,
+        p.RtLibraries > 0 ? new("光线追踪效果", s.Engine?.NoRayTracing == true ? "此游戏未启用" : s.Engine?.NoRtPipelines == true ? "内联光追：来自游戏文件" : p.RtUncovered == 0 ? "已覆盖" : s.RtToPlan ? "正在检查" : RtUnseen ? "录制时未观察到" : RtInline ? "已覆盖内联部分" : !Rt ? "大部分已覆盖" : CanRecord ? "需要录制" : "尚未编译") : null,
     }.OfType<DetailRow>().ToList();
     public bool HasSources => Sources.Count > 0;
     /// <summary>The community database's line under the recording row; null = nothing to say.</summary>
     string? CommunityLine => s.Community is { } c
-        ? $"Community recording downloaded {c.DownloadedAt.LocalDateTime:d}" + (s.RecordingSharedAt is { } at ? $" · yours shared {at.LocalDateTime:d}" : "")
-        : s.RecordingSharedAt is { } at2 ? $"Shared with the community database {at2.LocalDateTime:d}" : null;
+        ? $"已于 {c.DownloadedAt.LocalDateTime:d} 下载社区录制数据" + (s.RecordingSharedAt is { } at ? $" · 本机数据于 {at.LocalDateTime:d} 分享" : "")
+        : s.RecordingSharedAt is { } at2 ? $"已于 {at2.LocalDateTime:d} 分享至上游社区数据库" : null;
 
     // What's left and what helps. LeftOut is mostly Uncovered (root signature slots SCSKiller can't build) or, with a learned
     // lookup, stage sets no recording showed yet (no root signature / template): a longer recording is what helps there.
@@ -817,34 +802,35 @@ public sealed class DetailVm(string id) : Bindable
     /// <summary>tipAsks: the record tip already gives the ray tracing note and the recording advice.</summary>
     string LeftSentences(bool tipAsks) => string.Join(" ", new string?[]
     {
-        RtUnseen ? Sentence(ScsKiller.RtUnseenNote) + "." : RtInline ? Sentence(ScsKiller.RtInlineNote) + "." : !Rt || tipAsks ? null : CanRecord ? (HasDbTeaser ? ScsKiller.RtNeedsRecording : ScsKiller.RtNote(s.InCommunityDb)) + "."
-            : $"Ray-traced effects aren't compiled: they need a recording, {(!NoAntiCheat ? $"which {Fmt.AntiCheatName(s.AntiCheat)} blocks" : s.RootUnconfirmed ? ScsKiller.ManualNoRecording : ScsKiller.StreamlineNoRecording)}.",
+        RtUnseen ? "录制中尚未观察到光追效果。" : RtInline ? "内联光追效果仍需录制。" : !Rt || tipAsks ? null : CanRecord ? "光追效果尚未编译，需要开启录制并游玩。"
+            : !NoAntiCheat ? $"光追效果尚未编译；检测到 {Fmt.AntiCheatName(s.AntiCheat)}，请先确认录制风险。"
+            : s.RootUnconfirmed ? "光追效果尚未编译；请先确认游戏目录以启用录制。" : "光追效果尚未编译；此游戏的 DLSS 加载顺序阻止录制器工作。",
         LeftCase switch
         {
-            Left.AntiCheat => !NoAntiCheat ? $"Anything else compiles while you play: {Fmt.AntiCheatName(s.AntiCheat)} blocks the recording that would find it."
-                : s.RootUnconfirmed ? "Anything else compiles while you play: confirm the game's folder (Game folder… above) to record what's missing."
-                : "Anything else compiles while you play: DLSS on NVIDIA blocks the recording that would find it.",
-            Left.EngineSlots => "The rest use shader slots this game's engine adds." + (tipAsks ? "" : " A 5-minute recording lets SCSKiller rebuild them."),
-            Left.UnknownSlots => "The rest use shader slots SCSKiller can't rebuild yet, so they still compile while you play.",
-            Left.NotSeen => "SCSKiller hasn't seen how the game sets the rest up yet." + (tipAsks ? "" : " Playing longer with recording on teaches it."),
-            Left.Recording => "Recording is on: anything new you play is added the next time it compiles.",
-            Left.PlayedCompiles => $"Last time you played, {PlayCompiles(L!):N0} still had to compile." + (tipAsks ? "" : " Recording picks them up."),
+            Left.AntiCheat => !NoAntiCheat ? $"其余管线仍会在游玩时编译。检测到 {Fmt.AntiCheatName(s.AntiCheat)}；确认风险并启用录制后，SCSKiller 才能尝试收集。"
+                : s.RootUnconfirmed ? "其余管线仍会在游玩时编译。请先在上方确认游戏目录，以便录制缺失内容。"
+                : "其余管线仍会在游玩时编译。NVIDIA DLSS 的加载顺序使录制器无法收集它们。",
+            Left.EngineSlots => "其余部分使用游戏引擎新增的着色器槽位。" + (tipAsks ? "" : "录制约 5 分钟可帮助 SCSKiller 重建这些管线。"),
+            Left.UnknownSlots => "其余部分使用 SCSKiller 暂时无法重建的着色器槽位，因此仍会在游玩时编译。",
+            Left.NotSeen => "SCSKiller 尚未观察到游戏如何设置其余部分。" + (tipAsks ? "" : "延长录制游玩时间可补全信息。"),
+            Left.Recording => "录制已开启：新收集的内容会在下次编译时加入。",
+            Left.PlayedCompiles => $"上次游玩仍有 {PlayCompiles(L!):N0} 条管线临时编译。" + (tipAsks ? "" : "开启录制可收集它们。"),
             _ when Rt || RtUnseen || RtInline => null,   // ray tracing is what's left
-            Left.PlayedClean => "Nothing was missing last time you played.",
-            Left.NothingKnown => "Nothing SCSKiller knows of is missing.",
-            _ => "A few effects are only put together while you play." + (tipAsks ? "" : " A short recording picks them up."),
+            Left.PlayedClean => "上次游玩未发现缺失的管线。",
+            Left.NothingKnown => "已知内容没有缺失。",
+            _ => "少数效果只在游玩时组合生成。" + (tipAsks ? "" : "短时间录制即可收集。"),
         },
-        !Guessed ? null : tipAsks ? "Some shader states are guesses." : "Some shader states are guesses; a longer recording makes them exact.",
+        !Guessed ? null : tipAsks ? "部分着色器状态仍是推测值。" : "部分着色器状态仍是推测值；延长录制时间可提高准确性。",
     }.OfType<string>());
     // per-stage plans (AMD): the planner warns that a wrong guess costs a compile in game
     bool Guessed => P is { } g && g.GuessedUnits > 0.1 * (g.ExactUnits + g.InferredUnits + g.GuessedUnits);
     // not twice: a game that needs a recording has the button in its tip
     public bool ShowLeftRecord => ShowRecordAction && !HasRecordTip && s.NoStutter == null && (LeftCase is Left.EngineSlots or Left.NotSeen or Left.PlayedCompiles or Left.PlayOnly || Guessed || Rt || RtUnseen || RtInline);
     public bool ShowLeftCallout => HasPlan && ShowLeftRecord;   // before the first compile there's nothing left yet
-    public string LeftTitle => Rt || RtUnseen ? "Ray-traced effects aren't compiled yet" : "Some shaders still compile while you play";
+    public string LeftTitle => Rt || RtUnseen ? "光追效果尚未编译" : "部分着色器仍会在游玩时编译";
 
-    public string CoverageValue => Pct is { } pct ? $"{pct}%" : Dx11Only && !s.CompileUnreached ? "All" : Format.Dash;
-    public string CoverageLabel => s.CompileUnreached ? "not used" : CompiledPct != null ? "compiled" : Pct != null || Dx11Only ? "covered" : "not yet";
+    public string CoverageValue => Pct is { } pct ? $"{pct}%" : Dx11Only && !s.CompileUnreached ? "全部" : Format.Dash;
+    public string CoverageLabel => s.CompileUnreached ? "未生效" : CompiledPct != null ? "已编译" : Pct != null || Dx11Only ? "覆盖" : "尚无数据";
     // A geometry can't be shared between two Paths: each arc gets its own (120 px box, 12 px stroke).
     public Geometry? GoodArc => GoodCoverage ? Arc() : null;
     public Geometry? LowArc => LowCoverage ? Arc() : null;
@@ -859,76 +845,76 @@ public sealed class DetailVm(string id) : Bindable
         return g;
     }
     public bool HasTimeValue => Fmt.CompileTime(s) != null;
-    public string TimeLabel => s.LastWarmTime != null ? "Compile time" : "Compile time (estimate)";
-    public string TimeValue => s.LastWarmTime is { TotalMinutes: >= 1, TotalHours: < 1 } t ? $"{t.Minutes} min {t.Seconds} s"   // measured: to the second
-        : Format.Duration(Fmt.CompileTime(s));
+    public string TimeLabel => s.LastWarmTime != null ? "编译耗时" : "预计编译耗时";
+    public string TimeValue => s.LastWarmTime is { TotalMinutes: >= 1, TotalHours: < 1 } t ? $"{t.Minutes} 分 {t.Seconds} 秒"   // measured: to the second
+        : Fmt.Duration(Fmt.CompileTime(s));
     public bool HasDiskValue => s.CacheOnDisk != null || s.EstimatedCacheBytes != null;
-    public string DiskLabel => s.CacheOnDisk != null ? "Disk space" : "Disk space (estimate)";
+    public string DiskLabel => s.CacheOnDisk != null ? "磁盘占用" : "预计磁盘占用";
     public string DiskValue => Format.Bytes(s.CacheOnDisk ?? s.EstimatedCacheBytes);
     public bool HasShaderCount => s.ShaderCount != null;
     public string ShaderCount => Fmt.N(s.ShaderCount);
     // measured frames when the recorder timed them, else the compile count
     long? StutterCount => F != null ? ShaderHitches.Count : L is { } l ? PlayCompiles(l) : null;
-    public string StuttersValue => StutterCount is not { } n ? "" : n == 0 ? "None" : Fmt.N(n);
+    public string StuttersValue => StutterCount is not { } n ? "" : n == 0 ? "无" : Fmt.N(n);
     public bool HasStutters => StutterCount > 0;
     public bool NoStutters => StutterCount == 0;
     // without frame times the count is of compiles, which may or may not have stuttered
-    public string StuttersLabel => F != null ? "Stutters last time you played" : "Compiles while you played";
+    public string StuttersLabel => F != null ? "上次游玩的卡顿次数" : "游玩期间编译的管线";
 
     /// <summary>Every count, for power users.</summary>
     public IReadOnlyList<DetailRow> Details => new DetailRow?[]
     {
-        P is { } p ? new("Pipelines in the plan", Fmt.N(p.Recorded + p.Generated + p.MiddlewareItems)) : null,
-        s.ShaderCount != null ? new("Shaders in the game files", Fmt.N(s.ShaderCount)) : null,
-        P is { StageSets: > 0 } ? new("Shader combinations found", Fmt.N(P.StageSets)) : null,
-        P is { LeftOut: > 0 } ? new("Left out", Fmt.N(P.LeftOut) + (P.Uncovered == P.LeftOut ? " (shader slots SCSKiller can't rebuild)" : P.Uncovered > 0 ? $" ({P.Uncovered:N0} for shader slots SCSKiller can't rebuild)" : "")) : null,
-        P is { StageSets: 0, Uncovered: > 0 } ? new("Left out for shader slots SCSKiller can't rebuild", Fmt.N(P.Uncovered)) : null,
-        P != null ? new("Recorded pipelines", Fmt.N(P.Recorded)) : null,
-        P != null ? new("Built from the game files", Fmt.N(P.Generated)) : null,
-        P is { MiddlewareItems: > 0 } ? new("Upscaler pipelines", Fmt.N(P.MiddlewareItems)) : null,
-        P is { D3D11Shaders: > 0 } ? new("DirectX 11 shaders", Fmt.N(P.D3D11Shaders)) : null,
-        P is { RtLibraries: > 0 } ? new("Ray tracing shader libraries", $"{P.RtLibraries:N0}" + (s.Engine?.NoRtPipelines == true ? " (not used by the game)" : P.RtUncovered > 0 ? $" ({P.RtUncovered:N0} not compiled)" : "")) : null,
-        P is { RtInline: > 0 } ? new("Shaders that trace rays inline", Fmt.N(P.RtInline)) : null,
-        s.InCommunityDb is { } db && !HasDbTeaser ? new("In the community database", db ? $"{s.CommunityDbPsos:N0} pipelines" : "not yet") : null,
-        s.Community is { } c ? new("Community recording", $"{c.Psos:N0} pipelines") : null,
-        P != null ? new("Synthesized pipeline templates", Fmt.N(P.SynthesizedTemplates)) : null,
-        P != null ? new("Shader layouts", $"{P.RootSignatures:N0} · {RootSigSource(P)}") : null,
-        P is { } u && u.ExactUnits + u.InferredUnits + u.GuessedUnits > 0 ? new("Stage units exact / inferred / guessed", $"{u.ExactUnits:N0} / {u.InferredUnits:N0} / {u.GuessedUnits:N0}") : null,
-        P is { LayoutCoverage: > 0 } ? new("Vertex layouts from a recording", $"{P.LayoutCoverage:P1}") : null,
-        s.CacheOnDisk != null || s.EstimatedCacheBytes != null ? new("Driver cache", Fmt.Cache(s) + (s.CacheOnDisk != null ? " measured" : " estimated")) : null,
+        P is { } p ? new("计划中的管线", Fmt.N(p.Recorded + p.Generated + p.MiddlewareItems)) : null,
+        s.ShaderCount != null ? new("游戏文件中的着色器", Fmt.N(s.ShaderCount)) : null,
+        P is { StageSets: > 0 } ? new("发现的着色器组合", Fmt.N(P.StageSets)) : null,
+        P is { LeftOut: > 0 } ? new("未纳入计划", Fmt.N(P.LeftOut) + (P.Uncovered == P.LeftOut ? "（SCSKiller 暂无法重建的着色器槽位）" : P.Uncovered > 0 ? $"（其中 {P.Uncovered:N0} 条因着色器槽位暂无法重建）" : "")) : null,
+        P is { StageSets: 0, Uncovered: > 0 } ? new("因着色器槽位无法重建而遗漏", Fmt.N(P.Uncovered)) : null,
+        P != null ? new("已录制的管线", Fmt.N(P.Recorded)) : null,
+        P != null ? new("从游戏文件构建", Fmt.N(P.Generated)) : null,
+        P is { MiddlewareItems: > 0 } ? new("超分辨率组件管线", Fmt.N(P.MiddlewareItems)) : null,
+        P is { D3D11Shaders: > 0 } ? new("DirectX 11 着色器", Fmt.N(P.D3D11Shaders)) : null,
+        P is { RtLibraries: > 0 } ? new("光追着色器库", $"{P.RtLibraries:N0}" + (s.Engine?.NoRtPipelines == true ? "（游戏未使用）" : P.RtUncovered > 0 ? $"（{P.RtUncovered:N0} 条未编译）" : "")) : null,
+        P is { RtInline: > 0 } ? new("内联光追着色器", Fmt.N(P.RtInline)) : null,
+        s.InCommunityDb is { } db && !HasDbTeaser ? new("上游社区数据库", db ? $"{s.CommunityDbPsos:N0} 条管线" : "尚无数据") : null,
+        s.Community is { } c ? new("社区录制数据", $"{c.Psos:N0} 条管线") : null,
+        P != null ? new("合成的管线模板", Fmt.N(P.SynthesizedTemplates)) : null,
+        P != null ? new("着色器布局", $"{P.RootSignatures:N0} · {RootSigSource(P)}") : null,
+        P is { } u && u.ExactUnits + u.InferredUnits + u.GuessedUnits > 0 ? new("阶段单元：精确 / 推断 / 推测", $"{u.ExactUnits:N0} / {u.InferredUnits:N0} / {u.GuessedUnits:N0}") : null,
+        P is { LayoutCoverage: > 0 } ? new("录制得到的顶点布局覆盖率", $"{P.LayoutCoverage:P1}") : null,
+        s.CacheOnDisk != null || s.EstimatedCacheBytes != null ? new("驱动缓存", Fmt.Cache(s) + (s.CacheOnDisk != null ? "（实测）" : "（估计）")) : null,
     }.OfType<DetailRow>().ToList();
 
 
     // "Shipped with the shaders" is the carver's case.
     string RootSigSource(PlanStats p) =>
-        p.RootSigRuleVerified ? "tested on this engine version"
-        : p.RootSignatures == 0 ? "not needed (DirectX 11)"
-        : s.Engine?.Family == "Unreal" ? (p.Recorded > 0 ? "learned from recording" : "not tested on this engine version yet")
-        : p.Recorded > 0 ? "learned from recording" : "shipped with the shaders";
+        p.RootSigRuleVerified ? "已在此引擎版本验证"
+        : p.RootSignatures == 0 ? "不需要（DirectX 11）"
+        : s.Engine?.Family == "Unreal" ? (p.Recorded > 0 ? "来自录制" : "尚未在此引擎版本验证")
+        : p.Recorded > 0 ? "来自录制" : "随着色器提供";
 
     // Last compile: when, how long, what failed or was skipped and what to do; never compiled: what the first one costs.
     public bool HasCompileCard => CanCompile || s.LastWarmTime != null;
-    public string CompileTitle => s.LastWarmTime == null ? "First compile" : "Last compile";
+    public string CompileTitle => s.LastWarmTime == null ? "首次编译" : "上次编译";
     long Failed => s.LastWarmFailed ?? 0;
     long Skipped => s.LastWarmSkipped ?? 0;
     long Crashed => s.LastWarmCrashed ?? 0;
     public string CompileText => s.WarmedAt is { } at
-        ? $"Compiled {Fmt.When(at)}" + (s.LastWarmTime is { } t ? $" in {Format.Duration(t)}" : "") + $", for driver {s.WarmedDriverVersion}."
-          + (s.LastWarmFailed != null && Failed == 0 && Skipped == 0 && Crashed == 0 ? " Nothing failed." : "")   // null = not known (a warm from before these were kept): no claim
-          + (Failed > 0 ? $" The driver skipped {Failed:N0} combination{(Failed == 1 ? "" : "s")}." : "")
-          + (s.CacheOnDisk is { } c ? $" It uses {Format.Bytes(c)} of disk space." : "")
-        : s.LastWarmTime is { } last ? $"Its shader cache was cleared. The last compile took {Format.Duration(last)}."
-        : (s.EstimatedWarmTime is { } est ? $"It takes about {Format.Duration(est)} and runs in the background, so you can keep using the PC." : "It runs in the background, so you can keep using the PC.")
-          + (s.EstimatedCacheBytes is { } b ? $" It adds about {Format.Bytes(b)} to the driver's shader cache." : "");
-    public string SkippedTitle => $"{Skipped + Crashed:N0} skipped";
+        ? $"编译时间：{Fmt.When(at)}" + (s.LastWarmTime is { } t ? $"；耗时 {Fmt.Duration(t)}" : "") + $"；适用驱动 {s.WarmedDriverVersion}。"
+          + (s.LastWarmFailed != null && Failed == 0 && Skipped == 0 && Crashed == 0 ? "没有失败项。" : "")   // null = not known (a warm from before these were kept): no claim
+          + (Failed > 0 ? $"驱动跳过了 {Failed:N0} 个组合。" : "")
+          + (s.CacheOnDisk is { } c ? $"占用磁盘 {Format.Bytes(c)}。" : "")
+        : s.LastWarmTime is { } last ? $"着色器缓存已清空。上次编译耗时 {Fmt.Duration(last)}。"
+        : (s.EstimatedWarmTime is { } est ? $"预计耗时 {Fmt.Duration(est)}，编译在后台运行，可继续使用电脑。" : "编译在后台运行，可继续使用电脑。")
+          + (s.EstimatedCacheBytes is { } b ? $"预计增加约 {Format.Bytes(b)} 驱动着色器缓存。" : "");
+    public string SkippedTitle => $"跳过 {Skipped + Crashed:N0} 条";
     long NeedsRecording => Math.Min(Skipped, s.LastWarmNeedsRecording ?? 0);   // of Skipped: flagged by the community recording
     long NotInGame => Skipped - NeedsRecording;
     public string? SkippedText => s.WarmedAt == null || Skipped + Crashed == 0 ? null
         : string.Join(" ", new[]
         {
-            NotInGame > 0 ? $"{NotInGame:N0} {(NotInGame == 1 ? "was" : "were")} skipped: {(NotInGame == 1 ? "its shader isn't" : "their shaders aren't")} in this version of the game. Nothing to do." : null,
-            Crashed > 0 ? $"{Crashed:N0} {(Crashed == 1 ? "was" : "were")} skipped: {(Crashed == 1 ? "it crashes" : "they crash")} the GPU driver. If the game uses {(Crashed == 1 ? "it" : "them")}, it compiles {(Crashed == 1 ? "it" : "them")} itself." : null,
-            NeedsRecording > 0 ? $"{NeedsRecording:N0} need{(NeedsRecording == 1 ? "s" : "")} a recording on this PC: the game or a mod builds {(NeedsRecording == 1 ? "its shaders" : "their shaders")} while it runs, so they're in no game file. Play with \"Record while I play\" on to catch them." : null,
+            NotInGame > 0 ? $"跳过 {NotInGame:N0} 条：其着色器不在当前游戏版本中，无需处理。" : null,
+            Crashed > 0 ? $"跳过 {Crashed:N0} 条：编译会使显卡驱动崩溃。若游戏需要，它会自行编译。" : null,
+            NeedsRecording > 0 ? $"有 {NeedsRecording:N0} 条需要在本机录制：游戏或模组运行时才会生成其着色器，游戏文件中没有。开启“游玩时录制”并游玩以收集。" : null,
         }.OfType<string>());
     public bool HasSkipped => SkippedText != null;
 
@@ -937,7 +923,7 @@ public sealed class DetailVm(string id) : Bindable
     SessionStats? L => s.LastSession;
     public bool HasSession => L != null;
     public bool ShowSessionHint => L == null && CanRecord;
-    public string SessionHeader => L is { } l ? $"Last time you played · {Format.Duration(F?.Duration ?? l.Duration)}" : "";
+    public string SessionHeader => L is { } l ? $"上次游玩 · {Fmt.Duration(F?.Duration ?? l.Duration)}" : "";
     // ray tracing state objects included, so the headline agrees with the ray tracing line under it
     static long PlayCompiles(SessionStats l) => l.Compiles + l.StateObjectsCompiled;
     public string SessionVerdict
@@ -947,30 +933,30 @@ public sealed class DetailVm(string id) : Bindable
             if (L is not { } l) return "";
             long play = PlayCompiles(l), started = l.StartupCompiles + l.StateObjectsStartupCompiled, ready = l.FromGameLibrary + l.CacheHits + l.StateObjectsReady;
             if (play + started == 0)
-                return ready > 0 ? $"Nothing had to compile while you played: all {ready:N0} shader combinations the game used were ready." : "Nothing had to compile while you played.";
+                return ready > 0 ? $"游玩期间没有临时编译：游戏使用的 {ready:N0} 个着色器组合均已准备好。" : "游玩期间没有临时编译。";
             // the longest compile call, of the PSOs only; whether a frame stuttered is the frame report's to say
-            string worst = l.StateObjectsCompiled > 0 ? "" : play == 1 ? $" (it took {l.WorstCompileMs:0} ms)" : $" (the longest took {l.WorstCompileMs:0} ms)";
-            return (play == 0 ? "Nothing had to compile while you played." : $"{play:N0} had to compile while you played{worst}.")
-                + (started > 0 ? $" {started:N0} compiled while the game started or loaded." : "")
-                + (ready > 0 ? $" The other {ready:N0} were ready." : "");
+            string worst = l.StateObjectsCompiled > 0 ? "" : play == 1 ? $"（耗时 {l.WorstCompileMs:0} 毫秒）" : $"（最慢一条耗时 {l.WorstCompileMs:0} 毫秒）";
+            return (play == 0 ? "游玩期间没有临时编译。" : $"游玩期间临时编译了 {play:N0} 条管线{worst}。")
+                + (started > 0 ? $"启动或加载期间另编译了 {started:N0} 条。" : "")
+                + (ready > 0 ? $"其余 {ready:N0} 条已准备好。" : "");
         }
     }
     public bool HasStateObjectLine => L is { } l && l.StateObjectsReady + l.StateObjectsCompiled + l.StateObjectsStartupCompiled > 0;
-    public string StateObjectLine => L is { } l ? $"Ray tracing pipelines: {l.StateObjectsReady:N0} ready, {l.StateObjectsCompiled:N0} compiled while you played"
-        + (l.StateObjectsStartupCompiled > 0 ? $", {l.StateObjectsStartupCompiled:N0} while the game started or loaded." : ".") : "";
+    public string StateObjectLine => L is { } l ? $"光追管线：{l.StateObjectsReady:N0} 条已准备好，{l.StateObjectsCompiled:N0} 条在游玩时编译"
+        + (l.StateObjectsStartupCompiled > 0 ? $"，{l.StateObjectsStartupCompiled:N0} 条在启动或加载时编译。" : "。") : "";
     public bool HasRayQueryLine => L?.RayQueryRecompiles > 0;
     public string RayQueryLine => L is { RayQueryRecompiles: > 0 and var n }
-        ? $"{n:N0} ray-traced pipeline{(n == 1 ? "" : "s")} the driver partly recompiles every launch." : "";
+        ? $"有 {n:N0} 条光追管线每次启动时会被驱动部分重新编译。" : "";
 
     // The last launch's frame times (FrameLog): its shader stutters, other hitches and loading, the 1% low of play.
     public FrameReport? F => s.LastFrames;
     List<Hitch> ShaderHitches => F?.Hitches.Where(h => h.Cause == HitchCause.Shader).ToList() ?? [];
     public bool HasFrames => F != null;
     public string FramesVerdict => F is not { } f ? "" : FramesText(f, ShaderHitches);
-    public string GraphEnd => Format.Duration(F?.Duration);
+    public string GraphEnd => Fmt.Duration(F?.Duration);
     public string FramesSummary => F is not { } f ? ""
-        : $"Startup (the game's own shader precompile and first load): {Format.Duration(f.Startup)}. In play: {InPlay(f).Count(h => h.Ms >= 50):N0} frames of 50 ms or more, "
-          + $"{InPlay(f).Count(h => h.Ms >= 100):N0} of 100 ms or more. Frame times stay on this PC.";
+        : $"启动阶段（游戏自身预编译着色器和首次加载）：{Fmt.Duration(f.Startup)}。游玩期间：{InPlay(f).Count(h => h.Ms >= 50):N0} 帧耗时至少 50 毫秒，"
+          + $"{InPlay(f).Count(h => h.Ms >= 100):N0} 帧至少 100 毫秒。帧时间数据只保留在本机。";
     // the same list while the report is the same: a new one makes the slow-frames list rebuild every row at each refresh
     public IReadOnlyList<DetailRow> HitchRows => hitchRows.Report == F ? hitchRows.Rows
         : (hitchRows = (F, F?.Hitches.Select(h => new DetailRow($"{Clock(h.At)}  {Cause(h.Cause)}", Ms(h.Ms))).ToList() ?? [])).Rows;
@@ -981,9 +967,9 @@ public sealed class DetailVm(string id) : Bindable
 
     // the frames of play, between startup and quitting, whatever slowed them (a load in play too)
     static IEnumerable<Hitch> InPlay(FrameReport f) => f.Hitches.Where(h => FrameLog.InPlay(h.At.TotalMilliseconds, h.Ms, f.Startup.TotalMilliseconds) && h.Cause != HitchCause.Quitting);
-    static string Ms(double ms) => ms >= 1000 ? $"{ms / 1000:0.0} s" : $"{ms:0} ms";
-    static string Cause(HitchCause c) => c switch { HitchCause.Shader => "shader compile", HitchCause.Other => "other hitch", HitchCause.Quitting => "quitting",
-        HitchCause.LoadingShaders => "loading, compiling shaders", _ => "loading" };
+    static string Ms(double ms) => ms >= 1000 ? $"{ms / 1000:0.0} 秒" : $"{ms:0} 毫秒";
+    static string Cause(HitchCause c) => c switch { HitchCause.Shader => "着色器编译", HitchCause.Other => "其他卡顿", HitchCause.Quitting => "退出游戏",
+        HitchCause.LoadingShaders => "加载并编译着色器", _ => "加载" };
 
     /// <summary>"5 min: 3 stutters from shader compiles (worst 1.3 s), 2 other hitches, 1% low 35 fps. Loading: 4 slow
     /// frames compiling shaders (worst 9.4 s), 12 others." (compiling shaders: startup only)</summary>
@@ -991,15 +977,15 @@ public sealed class DetailVm(string id) : Bindable
     {
         int other = f.Hitches.Count(h => h.Cause == HitchCause.Other), loading = f.Hitches.Count(h => h.Cause == HitchCause.Loading);
         var compiling = f.Hitches.Where(h => h.Cause == HitchCause.LoadingShaders).ToList();
-        return $"{Format.Duration(f.Duration)}: " + (shader.Count == 0 ? "no stutters from shader compiles"
-                : $"{shader.Count:N0} stutter{(shader.Count == 1 ? "" : "s")} from shader compiles (worst {Ms(shader.Max(h => h.Ms))})")
-            + (other == 0 ? ", no other hitches" : $", {other:N0} other hitch{(other == 1 ? "" : "es")}")
-            + $", 1% low {f.Low1PctFps:0} fps."
-            + (compiling.Count + loading == 0 ? "" : " Loading: " + string.Join(", ", new[]
+        return $"{Fmt.Duration(f.Duration)}：" + (shader.Count == 0 ? "无着色器编译卡顿"
+                : $"{shader.Count:N0} 次着色器编译卡顿（最慢 {Ms(shader.Max(h => h.Ms))}）")
+            + (other == 0 ? "，无其他卡顿" : $"，其他卡顿 {other:N0} 次")
+            + $"，最低 1% 帧率 {f.Low1PctFps:0} fps。"
+            + (compiling.Count + loading == 0 ? "" : "加载阶段：" + string.Join("，", new[]
             {
-                compiling.Count == 0 ? null : $"{compiling.Count:N0} slow frame{(compiling.Count == 1 ? "" : "s")} compiling shaders (worst {Ms(compiling.Max(h => h.Ms))})",
-                loading == 0 ? null : compiling.Count == 0 ? $"{loading:N0} slow frame{(loading == 1 ? "" : "s")}" : $"{loading:N0} other{(loading == 1 ? "" : "s")}",
-            }.OfType<string>()) + ".");
+                compiling.Count == 0 ? null : $"{compiling.Count:N0} 帧因着色器编译而变慢（最慢 {Ms(compiling.Max(h => h.Ms))}）",
+                loading == 0 ? null : compiling.Count == 0 ? $"{loading:N0} 帧变慢" : $"另有 {loading:N0} 帧变慢",
+            }.OfType<string>()) + "。") ;
     }
 
     public GridLength LibraryWidth => new(L?.FromGameLibrary ?? 0, GridUnitType.Star);
@@ -1010,11 +996,11 @@ public sealed class DetailVm(string id) : Bindable
     public string CacheHits => Fmt.N(L?.CacheHits);
     public string Compiles => Fmt.N(L?.Compiles);
     public string SessionLabel => L is { } l
-        ? $"{l.Requests:N0} requests: {l.FromGameLibrary:N0} from the game's own library, {l.CacheHits:N0} already in the driver cache, {l.Compiles:N0} compiled during play"
-          + (l.StartupCompiles > 0 ? $", {l.StartupCompiles:N0} while the game started or loaded" : "")
-          + (l.RayQueryRecompiles > 0 ? $", {l.RayQueryRecompiles:N0} ray-traced pipelines the driver partly recompiles every launch" : "")
-          + (l.StateObjectsReady + l.StateObjectsCompiled + l.StateObjectsStartupCompiled > 0 ? $"; ray tracing pipelines {l.StateObjectsReady:N0} ready, {l.StateObjectsCompiled:N0} compiled during play" : "")
-          + (l.StateObjectsStartupCompiled > 0 ? $", {l.StateObjectsStartupCompiled:N0} while the game started or loaded" : "")
+        ? $"{l.Requests:N0} 次管线请求：{l.FromGameLibrary:N0} 条来自游戏自带库，{l.CacheHits:N0} 条已在驱动缓存中，{l.Compiles:N0} 条在游玩期间编译"
+          + (l.StartupCompiles > 0 ? $"，{l.StartupCompiles:N0} 条在启动或加载时编译" : "")
+          + (l.RayQueryRecompiles > 0 ? $"，{l.RayQueryRecompiles:N0} 条光追管线每次启动时被驱动部分重新编译" : "")
+          + (l.StateObjectsReady + l.StateObjectsCompiled + l.StateObjectsStartupCompiled > 0 ? $"；光追管线 {l.StateObjectsReady:N0} 条已准备好，{l.StateObjectsCompiled:N0} 条在游玩期间编译" : "")
+          + (l.StateObjectsStartupCompiled > 0 ? $"，{l.StateObjectsStartupCompiled:N0} 条在启动或加载时编译" : "")
         : "";
 
     public bool? RecordPending { get; set; }   // the state a recorder change that is running (off the UI thread) asked for
@@ -1187,7 +1173,7 @@ public sealed class QueueVm : Bindable
         QueueRow Row(QueueItem q, int number, bool first = false, bool last = false)
         {
             var g = games.GetValueOrDefault(q.GameId);
-            var time = q.Stage == QueueStage.Done ? Format.Duration(g?.LastWarmTime) : Left(q) is { } t ? Format.Duration(t) + (q.Progress?.PerSecond > 0 ? " 剩余" : "") : Format.Dash;
+            var time = q.Stage == QueueStage.Done ? Fmt.Duration(g?.LastWarmTime) : Left(q) is { } t ? Fmt.Duration(t) + (q.Progress?.PerSecond > 0 ? " 剩余" : "") : Format.Dash;
             return new(q.GameId, number, g?.Game.Name ?? q.GameId, g?.Game.ExePath ?? "", NoteOf(q, g), time, g is null ? Format.Dash : Fmt.Cache(g), q.Stage, first, last);
         }
 
@@ -1203,7 +1189,7 @@ public sealed class QueueVm : Bindable
         bool unknown = pending.Any(q => Left(q) is null && !ScsKiller.Stalled(q));
         Summary = pending.Count == 0 ? "队列为空"
             : $"{pending.Count} 款游戏 · "
-              + (total > TimeSpan.Zero ? $"合计约 {Format.Duration(total)}{(unknown ? "，另有计划待生成" : "")}" : "生成计划后才知道耗时")
+              + (total > TimeSpan.Zero ? $"合计约 {Fmt.Duration(total)}{(unknown ? "，另有计划待生成" : "")}" : "生成计划后才知道耗时")
               + (cur == null && !core.QueueRunning ? " · 尚未开始" : "");
 
         planned = pending.Sum(q => games.GetValueOrDefault(q.GameId)?.EstimatedCacheBytes ?? 0);
@@ -1447,7 +1433,7 @@ public sealed class AccountVm : Bindable
             Changed();
         }
     }
-    public string? DbNote => !A.SignedIn ? "所有用户都能查看上游社区数据库覆盖的游戏；下载共享着色器哈希需要 Patreon 会员权限。"
+    public string? DbNote => !A.SignedIn ? "上游社区数据库下载需要 Patreon 会员权限；本 fork 默认不连接该服务。"
         : A.Status is not { } st ? null   // not read yet: the status line above says "Checking…"
         : !A.HasDb ? "当前 Patreon 会员权限不包含社区数据库；已下载的内容仍可使用。"
         : (App.Core as ScsKiller)?.Community?.Problem;

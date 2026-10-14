@@ -85,8 +85,8 @@ public partial class AppTests
         Assert.True(ScsKiller.NeedsOfflineSession(s) && s.OfflineEligible);
         Assert.True(s.ReasonFlags.HasFlag(GameReasonFlags.OfflineSessionRequired));
         Assert.True(ScsKiller.NeedsOfflineSession(s with { StatusReason = "需要离线会话" }));
-        Assert.Equal(s.StatusReason, Format.ShortNote(s));
-        Assert.Equal(s.StatusReason, Format.ShortNote(s with { RecorderInstalled = true }));   // an offline session under way keeps the line
+        Assert.Equal("需要离线录制会话", Format.ShortNote(s));
+        Assert.Equal("需要离线录制会话", Format.ShortNote(s with { RecorderInstalled = true }));   // an offline session under way keeps the line
         Assert.Empty(StutterList.Recommended([s with { KnownStutter = new KnownStutter(StutterSeverity.Severe, "", "", "2026-01-01") }]));   // a ban risk isn't recommended
     });
 

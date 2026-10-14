@@ -497,8 +497,8 @@ public partial class AppTests
         s = k.Games.Single();
         Assert.False(ScsKiller.NeverRecorded(s));
         Assert.Null(s.RecorderRefused);
-        Assert.Equal("Recorder on: play 5 minutes", Format.ShortNote(s));
-        Assert.StartsWith("recorder on: play for about 5 minutes", Format.RecorderOnNote(s));
+        Assert.Equal("录制器已开启：请游玩约 5 分钟", Format.ShortNote(s));
+        Assert.StartsWith("录制器已开启：请游玩约 5 分钟", Format.RecorderOnNote(s));
     }
 
     /// <summary>The exe changed since the recorder was armed and the proxy refused its launch: the watcher arms it anew, and

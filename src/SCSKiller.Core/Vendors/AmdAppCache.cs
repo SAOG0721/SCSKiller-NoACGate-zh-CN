@@ -147,9 +147,9 @@ public sealed class AmdAppCache(string dxcDir, string dxDir) : IAppCache
         var growing = queue.Where(q => q.Bytes > 0).ToList();
         long planned = growing.Sum(q => q.Bytes), free = Math.Max(0, cap - used);
         if (planned <= free) return null;
-        return $"This queue adds about {App.Format.Bytes(planned)} to the shader cache ({string.Join(", ", growing.Select(q => $"{q.Game} {App.Format.Bytes(q.Bytes)}"))}), "
-            + $"{App.Format.Bytes(planned - free)} more than the {App.Format.Bytes(free)} free under the AMD driver's fixed {App.Format.Bytes(cap)} limit. "
-            + "The driver then trims the least recently used caches, older games' included, and those games stutter until compiled again.";
+        return $"此队列预计增加约 {App.Format.Bytes(planned)} 着色器缓存（{string.Join("，", growing.Select(q => $"{q.Game} {App.Format.Bytes(q.Bytes)}"))}），"
+            + $"比 AMD 驱动固定上限 {App.Format.Bytes(cap)} 下的剩余空间 {App.Format.Bytes(free)} 多 {App.Format.Bytes(planned - free)}。"
+            + "驱动随后会清理较久未使用的缓存，包括其他游戏；相关游戏重新编译前可能再次卡顿。";
     }
 
     IEnumerable<(string Path, string Key)> All()

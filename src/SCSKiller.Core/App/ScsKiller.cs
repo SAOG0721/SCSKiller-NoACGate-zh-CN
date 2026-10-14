@@ -32,10 +32,10 @@ public sealed partial class ScsKiller : IScsKiller
     /// <see cref="LargeCompile"/>; else null. It names that game's own cache estimate, as the Library shows it, in whole GB.
     /// On AMD the driver's cache can't hold it all.</summary>
     public static string? LargeCompileWarning(IEnumerable<(long Growth, long Estimate)> queue, GpuVendor vendor) =>
-        LargeCompileGb(queue) is { } gb ? $"This compile adds about {gb:0} GB. {LargeCacheCost}"
-            + (vendor == GpuVendor.Amd ? $" It's more than the AMD driver's {App.Format.Bytes(AmdAppCache.DxcCacheCap)} cache can hold." : "") : null;
+        LargeCompileGb(queue) is { } gb ? $"此次编译预计增加约 {gb:0} GB 缓存。{LargeCacheCost}"
+            + (vendor == GpuVendor.Amd ? $"已超过 AMD 驱动 {App.Format.Bytes(AmdAppCache.DxcCacheCap)} 的固定缓存上限。" : "") : null;
 
-    const string LargeCacheCost = "Very large caches can make the game start slower and use more memory.";
+    const string LargeCacheCost = "超大缓存可能使游戏启动变慢并增加内存占用。";
 
     static double? LargeCompileGb(IEnumerable<(long Growth, long Estimate)> queue) =>
         queue.DefaultIfEmpty().MaxBy(q => q.Growth) is (> LargeCompile, var estimate) ? Math.Round(estimate / (double)(1L << 30), MidpointRounding.AwayFromZero) : null;
@@ -47,9 +47,9 @@ public sealed partial class ScsKiller : IScsKiller
     {
         if (limit is not { } max) return LargeCompileWarning(queue, vendor);
         if (LargeCompileGb(queue) is { } gb && usage + planned > max)
-            return $"This compile adds about {gb:0} GB and takes the cache past your {App.Format.Bytes(max)} limit, so older games may be evicted. {LargeCacheCost}";
+            return $"此次编译预计增加约 {gb:0} GB，使缓存超过 {App.Format.Bytes(max)} 上限；较早游戏的缓存可能被清理。{LargeCacheCost}";
         return LargeCompileWarning(queue, vendor)
-            ?? (planned > 0 && usage + planned > 0.9 * max ? $"After this queue the cache is close to its {App.Format.Bytes(max)} limit, older games may be evicted." : null);
+            ?? (planned > 0 && usage + planned > 0.9 * max ? $"完成此队列后，缓存将接近 {App.Format.Bytes(max)} 上限；较早游戏的缓存可能被清理。" : null);
     }
     static readonly byte[] ProxyMarker = "SCSKillerNoACGate_StartWarm"u8.ToArray();   // an export only our proxy d3d12.dll has
     const string RecorderIni = "[scskiller]\r\n; written by SCSKiller: record the pipelines this game creates. Removed by 'uninstall recorder'.\r\nmode=record\r\n";
@@ -956,7 +956,7 @@ public sealed partial class ScsKiller : IScsKiller
     /// <summary>"256 MB", "1 GB"; "Unlimited" for 0.</summary>
     public static string LimitText(int mb) => mb <= 0 ? "Unlimited" : mb % 1024 == 0 ? $"{mb / 1024} GB" : $"{mb} MB";
 
-    public static string PausedNote(Settings s) => $"Recording paused: limit reached ({LimitText(s.RecordingLimitMB)})";
+    public static string PausedNote(Settings s) => $"录制已暂停：达到容量上限（{LimitText(s.RecordingLimitMB)}）";
 
     /// <summary>The last build can't compile the game's ray tracing and no recording has any: more than 10% of its DXIL
     /// libraries have no synthesized collection and no recorded state object (<see cref="PlanStats.RtUncovered"/>): AMD (its
@@ -1053,8 +1053,8 @@ public sealed partial class ScsKiller : IScsKiller
 
     /// <summary>Why a game's ray tracing needs a recording on this PC (<see cref="NeedsRtRecording"/>), for the detail page.</summary>
     public static string RtWhy(VendorCaps caps, EngineInfo? e) => caps.RtCacheGranularity == RtCacheGranularity.WholeObject
-        ? "This GPU's driver reuses ray tracing pipelines only exactly as the game builds them, and which ones it builds isn't in its files."
-        : $"SCSKiller can't rebuild {(e is { } x ? Format.Engine(x) : "this engine")}'s ray tracing layout from the game files yet.";
+        ? "此显卡驱动只会复用与游戏创建方式完全相同的光追管线，而游戏文件未说明具体会创建哪些管线。"
+        : $"SCSKiller 目前无法仅从游戏文件重建{(e is { } x ? Format.Engine(x) : "此引擎")}的光追布局。";
 
     static string RtBlocked(bool rt, string? noRecording, string reason) => !rt ? reason
         : noRecording != null ? $"{reason}; ray-traced effects aren't compiled: they need a recording, {noRecording}" : $"{reason}; {RtAfterRecordingNote}";
@@ -1069,11 +1069,11 @@ public sealed partial class ScsKiller : IScsKiller
     /// one the game runs. Null: nothing guessed that matters.</summary>
     public static string? GuessNote(EngineInfo e) => (e.VersionGuessed, e.ApiGuessed) switch
     {
-        (true, true) => "Unreal version and DirectX",
-        (true, false) when e.GraphicsApi.Contains("D3D12") => "Unreal version",
-        (false, true) => "DirectX",
+        (true, true) => "Unreal 版本和 DirectX 模式",
+        (true, false) when e.GraphicsApi.Contains("D3D12") => "Unreal 版本",
+        (false, true) => "DirectX 模式",
         _ => null,
-    } is { } what ? what + " guessed, so the compile could be wrong." : null;
+    } is { } what ? what + "是推测值，编译结果可能不准确。" : null;
 
     /// <summary>Why a game the user added has no recorder yet, after "needs a recording, ".</summary>
     public const string ManualNoRecording = "once you confirm its game folder", StreamlineNoRecording = "which DLSS on NVIDIA blocks";
@@ -2243,15 +2243,15 @@ public sealed partial class ScsKiller : IScsKiller
         }
     }
 
-    /// <summary>The shared packs (<see cref="SyncPacks"/>, whatever the settings and the sign-in), then with
-    /// Settings.UseCommunityDb the manifest, then a download for every game whose build has an entry other than the one it has; each game
+    /// <summary>With Settings.UseCommunityDb enabled, the shared packs (<see cref="SyncPacks"/>), then
+    /// the manifest and a download for every game whose build has an entry other than the one it has; each game
     /// that got one, or whose entry the manifest check changed (signed out nothing downloads), is re-evaluated. Never throws.</summary>
     async Task SyncCommunity(IReadOnlyList<Game> games)
     {
         try
         {
-            foreach (var g in await SyncPacks(games, CancellationToken.None)) Refresh(g);
             if (!Settings.UseCommunityDb) return;
+            foreach (var g in await SyncPacks(games, CancellationToken.None)) Refresh(g);
             foreach (var g in games)
                 if (await SyncCommunity(g, null, CancellationToken.None) || DbEntryChanged(g)) Refresh(g);
         }

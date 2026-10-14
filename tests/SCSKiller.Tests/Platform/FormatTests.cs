@@ -37,9 +37,9 @@ public class FormatTests
     [Fact]
     public void A_middleware_tag_says_what_is_compiled()
     {
-        Assert.Equal("FSR4: 80 known pipelines, compiled with the game", Format.Middleware(new("FSR4", ["amdxcffx64.dll"], 80)));
-        Assert.Equal("DLSS: compiled by the NVIDIA driver itself", Format.Middleware(new("DLSS", ["nvngx_dlss.dll"], 0)));
-        Assert.Equal("XeSS: detected; added after a recording sees them", Format.Middleware(new("XeSS", ["libxess.dll"], 0)));
+        Assert.Equal("FSR4：已知 80 条管线，会随游戏一起编译", Format.Middleware(new("FSR4", ["amdxcffx64.dll"], 80)));
+        Assert.Equal("DLSS：由 NVIDIA 驱动自行编译", Format.Middleware(new("DLSS", ["nvngx_dlss.dll"], 0)));
+        Assert.Equal("XeSS：已检测到，录制识别后可加入编译", Format.Middleware(new("XeSS", ["libxess.dll"], 0)));
     }
 
     static readonly EngineInfo Ue = new("Unreal", "4.27", null, "D3D12", false, null);
@@ -47,6 +47,25 @@ public class FormatTests
     static GameState S(GameStatus status, string reason, EngineInfo? engine = null, AntiCheat ac = AntiCheat.None) =>
         new(new Game("steam:1", "Game", Store.Steam, @"X:\g", @"X:\g\g.exe"), engine ?? Ue, ac, status, reason,
             null, null, null, null, "610.88", null, null, false, null);
+
+    [Fact]
+    public void Player_facing_reasons_explain_consent_and_common_states_without_changing_core_reasons()
+    {
+        var blocked = S(GameStatus.Unsupported, "needs a recording, which EasyAntiCheat blocks", ac: AntiCheat.EasyAntiCheat)
+            with { ReasonFlags = GameReasonFlags.AntiCheatRecordingBlocked };
+        Assert.Contains("确认风险", Format.Reason(blocked));
+        Assert.Equal("needs a recording, which EasyAntiCheat blocks", blocked.StatusReason);
+        Assert.Contains("游戏世界", Format.Reason(S(GameStatus.NeedsRecording, "the recording has no draws: play into the game world")));
+        Assert.Contains("请重新编译", Format.Reason(S(GameStatus.Stale, "driver changed: 610.88 -> 616.92")));
+        Assert.Contains("已具备编译条件", Format.Reason(S(GameStatus.Ready, "no recording needed")));
+    }
+
+    [Fact]
+    public void Recorder_refusals_keep_the_proxy_cause_visible_in_Chinese()
+    {
+        Assert.Contains("反作弊客户端", Format.RecorderRefused("The last launch wasn't recorded: anti-cheat client loaded."));
+        Assert.Contains("目前无法判断", Format.RecorderRefused(ScsKiller.NeverSawNote));
+    }
 
     /// <summary>"Not supported yet · An app update is needed for support": an unsupported game's page and Library tooltip
     /// add no notes to its reason, not a shader mod's; other statuses keep them.</summary>
@@ -57,7 +76,7 @@ public class FormatTests
         Assert.Equal("", Format.ModNote(unsupported));
 
         var warmed = unsupported with { Status = GameStatus.Warmed };
-        Assert.StartsWith("; RenoDX ", Format.ModNote(warmed));
+        Assert.StartsWith("；RenoDX ", Format.ModNote(warmed));
     }
 
     /// <summary>A Library row's note is a few words for each reason the core gives (the whole one stays the tooltip's).</summary>
@@ -69,48 +88,48 @@ public class FormatTests
         {
             (S(GameStatus.Ready, Core.Planning.Planner.NoRecording), null),
             (S(GameStatus.Ready, "planned from a recording"), null),
-            (S(GameStatus.Ready, Core.Planning.Planner.Untested), "Not tested on this engine version"),
+            (S(GameStatus.Ready, Core.Planning.Planner.Untested), "此引擎版本尚未测试"),
             (S(GameStatus.Ready, "compiles every DirectX 11 shader"), "DirectX 11"),
-            (S(GameStatus.Ready, "no recording needed; also compiles every DirectX 11 shader (the game may run on either)"), "DirectX 11 and 12"),
-            (S(GameStatus.Ready, "compiles every DirectX 11 shader (the game may run on either); for DirectX 12, turn on recording and play for about 5 minutes"), "DirectX 11; DirectX 12 needs a recording"),
-            (S(GameStatus.Ready, "no recording needed; ray-traced effects aren't compiled: they need a recording, which BattlEye blocks", ac: AntiCheat.BattlEye), "Ray tracing blocked by BattlEye"),
-            (S(GameStatus.NeedsRecording, Core.Planning.Planner.Record), "Turn on Record and play"),
-            (S(GameStatus.NeedsRecording, Core.Planning.Planner.Record) with { RecorderSkip = ScsKiller.SkipForeignDll }, "Recorder not available"),
-            (S(GameStatus.NeedsRecording, Core.Planning.Planner.Record) with { RecorderInstalled = true }, "Recorder on: play 5 minutes"),
-            (S(GameStatus.NeedsRecording, Dx11Too) with { RecorderInstalled = true }, "Recorder on: play on DirectX 12"),
-            (S(GameStatus.NeedsRecording, Core.Planning.Planner.Record + "; " + ScsKiller.InDbNote) with { InCommunityDb = true }, "In the community database"),
-            (S(GameStatus.NeedsRecording, ScsKiller.RtNote(false)) with { InCommunityDb = false }, "For ray-traced effects"),
-            (S(GameStatus.NeedsRecording, "the recording has no draws: play into the game world"), "Play into the game world"),
-            (S(GameStatus.Warmed, "warmed for driver 1.0; " + ScsKiller.RtAfterRecordingNote) with { ReasonFlags = GameReasonFlags.RayTracingRecordingAvailable }, "Ray tracing needs a 5-min recording"),
-            (S(GameStatus.Warmed, "warmed for driver 1.0; " + ScsKiller.RtAfterRecordingNote) with { RecorderInstalled = true, ReasonFlags = GameReasonFlags.RayTracingRecordingAvailable }, "Recorder on: play with ray tracing"),
-            (S(GameStatus.Unsupported, "needs a recording, which EasyAntiCheat blocks", ac: AntiCheat.EasyAntiCheat) with { ReasonFlags = GameReasonFlags.AntiCheatRecordingBlocked }, "Blocked by EasyAntiCheat"),
-            (S(GameStatus.Unsupported, "needs a recording, which its anti-cheat blocks", ac: AntiCheat.Other) with { ReasonFlags = GameReasonFlags.AntiCheatRecordingBlocked }, "Blocked by anti-cheat"),
+            (S(GameStatus.Ready, "no recording needed; also compiles every DirectX 11 shader (the game may run on either)"), "DirectX 11 和 12"),
+            (S(GameStatus.Ready, "compiles every DirectX 11 shader (the game may run on either); for DirectX 12, turn on recording and play for about 5 minutes"), "DirectX 11 可编译；DirectX 12 需要录制"),
+            (S(GameStatus.Ready, "no recording needed; ray-traced effects aren't compiled: they need a recording, which BattlEye blocks", ac: AntiCheat.BattlEye), "光追录制受 BattlEye 限制"),
+            (S(GameStatus.NeedsRecording, Core.Planning.Planner.Record), "开启录制并游玩"),
+            (S(GameStatus.NeedsRecording, Core.Planning.Planner.Record) with { RecorderSkip = ScsKiller.SkipForeignDll }, "录制器当前不可用"),
+            (S(GameStatus.NeedsRecording, Core.Planning.Planner.Record) with { RecorderInstalled = true }, "录制器已开启：请游玩约 5 分钟"),
+            (S(GameStatus.NeedsRecording, Dx11Too) with { RecorderInstalled = true }, "录制器已开启：请用 DirectX 12 游玩"),
+            (S(GameStatus.NeedsRecording, Core.Planning.Planner.Record + "; " + ScsKiller.InDbNote) with { InCommunityDb = true }, "社区数据库已有录制"),
+            (S(GameStatus.NeedsRecording, ScsKiller.RtNote(false)) with { InCommunityDb = false }, "用于光线追踪效果"),
+            (S(GameStatus.NeedsRecording, "the recording has no draws: play into the game world"), "请进入游戏世界并游玩"),
+            (S(GameStatus.Warmed, "warmed for driver 1.0; " + ScsKiller.RtAfterRecordingNote) with { ReasonFlags = GameReasonFlags.RayTracingRecordingAvailable }, "光追还需要约 5 分钟录制"),
+            (S(GameStatus.Warmed, "warmed for driver 1.0; " + ScsKiller.RtAfterRecordingNote) with { RecorderInstalled = true, ReasonFlags = GameReasonFlags.RayTracingRecordingAvailable }, "录制器已开启：请启用光追并游玩"),
+            (S(GameStatus.Unsupported, "needs a recording, which EasyAntiCheat blocks", ac: AntiCheat.EasyAntiCheat) with { ReasonFlags = GameReasonFlags.AntiCheatRecordingBlocked }, "需确认EasyAntiCheat录制风险"),
+            (S(GameStatus.Unsupported, "needs a recording, which its anti-cheat blocks", ac: AntiCheat.Other) with { ReasonFlags = GameReasonFlags.AntiCheatRecordingBlocked }, "需确认反作弊组件录制风险"),
             (S(GameStatus.Unsupported, "needs a recording, which its anti-cheat blocks; " + ScsKiller.InDbNote, ac: AntiCheat.Other) with { InCommunityDb = true, ReasonFlags = GameReasonFlags.AntiCheatRecordingBlocked },
-                "Blocked by anti-cheat · in the community database"),
-            (S(GameStatus.Unsupported, packed, Ue with { Version = "-", Unsupported = packed }), "Engine not supported yet"),
+                "需确认反作弊组件录制风险 · 社区数据库已有录制"),
+            (S(GameStatus.Unsupported, packed, Ue with { Version = "-", Unsupported = packed }), "引擎暂不支持"),
             (S(GameStatus.Unsupported, "encrypted game files (needs the game's AES key)", Ue with { Encrypted = true, Unsupported = "encrypted game files (needs the game's AES key)" }), null),
-            (S(GameStatus.Unsupported, "no D3D shaders (SF_VULKAN_SM5)", Ue with { Unsupported = "no D3D shaders (SF_VULKAN_SM5)" }), "No DirectX shaders"),
-            (S(GameStatus.Unsupported, "engine not supported yet") with { Engine = null }, "Engine not supported yet"),
-            (S(GameStatus.Unsupported, "Access to the path is denied.") with { Engine = null }, "Couldn't read the game files"),
-            (S(GameStatus.Unsupported, "runs on Vulkan"), "Runs on Vulkan"),
-            (S(GameStatus.Unsupported, "runs on DirectX 11 (its config)"), "Runs on DirectX 11"),
-            (S(GameStatus.Unsupported, "not supported on this GPU yet"), "Not supported on this GPU yet"),
-            (S(GameStatus.Stale, "driver changed: 596.36 -> 610.88"), "Driver 610.88 cleared its cache"),
-            (S(GameStatus.Stale, ScsKiller.TrimmedPartReason), "The driver trimmed its cache"),
-            (S(GameStatus.Stale, ScsKiller.MissesGameReason), "The compile missed the game's cache"),
-            (S(GameStatus.Unsupported, ScsKiller.CantReachReason), "The compile can't reach this game"),
-            (S(GameStatus.Stale, "game updated since the warm (build 1 -> 2)"), "Game updated"),
-            (S(GameStatus.Stale, "game shaders changed since the warm"), "Game shaders changed"),
-            (S(GameStatus.Stale, "SCSKiller can now compile 120 more pipelines for this game"), "SCSKiller can compile more"),
-            (S(GameStatus.Stale, "1,234 new pipelines recorded; compile again to include them"), "1,234 new pipelines recorded"),
-            (S(GameStatus.Warmed, "warmed for driver 610.88"), "Driver 610.88"),
-            (S(GameStatus.Warmed, "warmed for driver 610.88") with { Plan = new PlanStats(0, 38_114, 0, 0, true, D3D11Shaders: 41_206) }, "DirectX 11 and 12"),
-            (S(GameStatus.Warmed, "warmed for driver 610.88") with { Plan = new PlanStats(0, 0, 0, 0, true, D3D11Shaders: 41_206) }, "Driver 610.88"),
-            (S(GameStatus.Warmed, "warmed for driver 610.88") with { Plan = new PlanStats(0, 900, 0, 0, true, D3D11Shaders: 10, Uncovered: 101) }, "DirectX 11 and 12 · partly covered"),
-            (S(GameStatus.Warmed, ScsKiller.UnreachedReason) with { CompileUnreached = true }, "This game needs a custom loader"),
-            (Tekken(GameStatus.Warmed), $"The driver skipped {180_000:N0} of {258_210:N0} pipelines"),
-            (Tekken(GameStatus.Warmed) with { CompileUnreached = true, StatusReason = ScsKiller.UnreachedReason }, "This game needs a custom loader"),
-            (Tekken(GameStatus.Stale) with { StatusReason = "driver changed: 610.88 -> 616.92" }, "Driver 616.92 cleared its cache"),
+            (S(GameStatus.Unsupported, "no D3D shaders (SF_VULKAN_SM5)", Ue with { Unsupported = "no D3D shaders (SF_VULKAN_SM5)" }), "未找到 DirectX 着色器"),
+            (S(GameStatus.Unsupported, "engine not supported yet") with { Engine = null }, "引擎暂不支持"),
+            (S(GameStatus.Unsupported, "Access to the path is denied.") with { Engine = null }, "无法读取游戏文件"),
+            (S(GameStatus.Unsupported, "runs on Vulkan"), "游戏使用 Vulkan"),
+            (S(GameStatus.Unsupported, "runs on DirectX 11 (its config)"), "游戏使用 DirectX 11"),
+            (S(GameStatus.Unsupported, "not supported on this GPU yet"), "此显卡暂不支持"),
+            (S(GameStatus.Stale, "driver changed: 596.36 -> 610.88"), "驱动 610.88 已清除缓存"),
+            (S(GameStatus.Stale, ScsKiller.TrimmedPartReason), "驱动清理了部分缓存"),
+            (S(GameStatus.Stale, ScsKiller.MissesGameReason), "编译未进入游戏使用的缓存"),
+            (S(GameStatus.Unsupported, ScsKiller.CantReachReason) with { ReasonFlags = GameReasonFlags.CacheUnreachable }, "编译无法覆盖此游戏"),
+            (S(GameStatus.Stale, "game updated since the warm (build 1 -> 2)"), "游戏已更新"),
+            (S(GameStatus.Stale, "game shaders changed since the warm"), "游戏着色器已改变"),
+            (S(GameStatus.Stale, "SCSKiller can now compile 120 more pipelines for this game"), "SCSKiller 可编译更多内容"),
+            (S(GameStatus.Stale, "1,234 new pipelines recorded; compile again to include them"), "1,234 条新管线"),
+            (S(GameStatus.Warmed, "warmed for driver 610.88"), "驱动 610.88"),
+            (S(GameStatus.Warmed, "warmed for driver 610.88") with { Plan = new PlanStats(0, 38_114, 0, 0, true, D3D11Shaders: 41_206) }, "DirectX 11 和 12"),
+            (S(GameStatus.Warmed, "warmed for driver 610.88") with { Plan = new PlanStats(0, 0, 0, 0, true, D3D11Shaders: 41_206) }, "驱动 610.88"),
+            (S(GameStatus.Warmed, "warmed for driver 610.88") with { Plan = new PlanStats(0, 900, 0, 0, true, D3D11Shaders: 10, Uncovered: 101) }, "DirectX 11 和 12 · 部分覆盖"),
+            (S(GameStatus.Warmed, ScsKiller.UnreachedReason) with { CompileUnreached = true }, "此游戏需要专用加载方式"),
+            (Tekken(GameStatus.Warmed), $"驱动跳过了 {180_000:N0} / {258_210:N0} 条管线"),
+            (Tekken(GameStatus.Warmed) with { CompileUnreached = true, StatusReason = ScsKiller.UnreachedReason }, "此游戏需要专用加载方式"),
+            (Tekken(GameStatus.Stale) with { StatusReason = "driver changed: 610.88 -> 616.92" }, "驱动 616.92 已清除缓存"),
         };
         Assert.All(cases, c => Assert.Equal(c.Note, Format.ShortNote(c.State)));
     }
@@ -157,8 +176,8 @@ public class FormatTests
     public void The_recorder_on_note_keeps_the_DirectX_12_hint()
     {
         var s = S(GameStatus.NeedsRecording, Dx11Too) with { RecorderInstalled = true };
-        Assert.Equal("recorder on: play for about 5 minutes, " + Core.Planning.Planner.Dx12Only, Format.RecorderOnNote(s));
-        Assert.Equal("recorder on: play for about 5 minutes", Format.RecorderOnNote(s with { StatusReason = Core.Planning.Planner.Record }));
+        Assert.Equal("录制器已开启：请游玩约 5 分钟；请使用 DirectX 12，游戏也可能以 DirectX 11 运行", Format.RecorderOnNote(s));
+        Assert.Equal("录制器已开启：请游玩约 5 分钟", Format.RecorderOnNote(s with { StatusReason = Core.Planning.Planner.Record }));
     }
 
     static GpuInfo Gpu(GpuVendor v, string name, ulong vram) => new(v, name, "1.0", 0, vram);
@@ -166,9 +185,9 @@ public class FormatTests
     [Fact]
     public void The_gpu_notice_shows_on_other_vendors_until_closed_for_that_gpu()
     {
-        Assert.StartsWith("SCSKiller doesn't compile on Intel GPUs yet", Format.GpuNotice(Gpu(GpuVendor.Intel, "Intel Graphics", 0), null));
-        Assert.StartsWith("SCSKiller doesn't compile on Qualcomm GPUs yet", Format.GpuNotice(Gpu(GpuVendor.Qualcomm, "Adreno", 0), null));
-        Assert.StartsWith("SCSKiller doesn't compile on this GPU yet", Format.GpuNotice(Gpu(GpuVendor.Unknown, "no D3D adapter", 0), null));
+        Assert.StartsWith("SCSKiller 暂不支持在 Intel 显卡上编译", Format.GpuNotice(Gpu(GpuVendor.Intel, "Intel Graphics", 0), null));
+        Assert.StartsWith("SCSKiller 暂不支持在 Qualcomm 显卡上编译", Format.GpuNotice(Gpu(GpuVendor.Qualcomm, "Adreno", 0), null));
+        Assert.StartsWith("SCSKiller 暂不支持在此显卡上编译", Format.GpuNotice(Gpu(GpuVendor.Unknown, "no D3D adapter", 0), null));
         Assert.Null(Format.GpuNotice(Gpu(GpuVendor.Nvidia, "NVIDIA GeForce", 8UL << 30), null));
         Assert.Null(Format.GpuNotice(Gpu(GpuVendor.Amd, "AMD Radeon", 8UL << 30), null));
         Assert.Null(Format.GpuNotice(Gpu(GpuVendor.Intel, "Intel Graphics", 0), "Intel Graphics"));

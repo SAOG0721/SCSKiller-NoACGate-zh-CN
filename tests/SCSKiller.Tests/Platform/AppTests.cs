@@ -69,8 +69,11 @@ public partial class AppTests : IDisposable
         Game[]? games = null, IGpuVendorBackend? vendor = null, IGameSource? source = null, IGameSource[]? sources = null)
     {
         var v = vendor ?? new FakeVendor(Gpu with { DriverVersion = driver });
+        var data = Path.Combine(_root, "data");
+        // Most integration cases exercise the community feature while it is enabled; the fork's real default is tested separately.
+        if (!File.Exists(Path.Combine(data, "settings.json"))) new AppStore(data).SaveSettings(AppStore.DefaultSettings with { UseCommunityDb = true });
         var k = new ScsKiller(sources ?? [source ?? new FakeSource(games ?? [game ?? _game])], v, reader ?? new FakeReader(null),
-            planner ?? new FakePlanner(), warmer ?? new FakeWarmer(), Path.Combine(_root, "data"), _proxy)
+            planner ?? new FakePlanner(), warmer ?? new FakeWarmer(), data, _proxy)
         {
             LocalAppData = _root, MyGames = Path.Combine(_root, "My Games"), ProgramData = Path.Combine(_root, "ProgramData"),   // never the real D3DSCache or Saved folders
             Adapters = () => [Listed(v.Gpu)],   // DXGI lists the vendor's adapter, its version as the user-mode one
@@ -2712,7 +2715,7 @@ public partial class AppTests : IDisposable
         s = k.Games.Single();
         Assert.Equal((GameStatus.Unsupported, "RenoDX", true, ScsKiller.ShaderModReason("RenoDX", LayerBlock.NotBesideExe), ScsKiller.SkipShaderMod),
             (s.Status, s.ShaderMod, s.ShaderModBlocks, s.StatusReason, s.RecorderSkip));
-        Assert.Equal("RenoDX changes all its pipelines", Format.ShortNote(s));
+        Assert.Equal("RenoDX 会改变全部管线", Format.ShortNote(s));
         Assert.False(s.RecorderInstalled);   // the state the removal left
         Assert.False(File.Exists(Path.Combine(_exeDir, "d3d12.dll")));
 
@@ -4556,7 +4559,7 @@ public partial class AppTests : IDisposable
         var stored = new FileInfo(Path.Combine(k.Store.GameDir(_game.Id), "recording.db")).Length;
         Assert.InRange(stored, 600_000, 620_000);
         Assert.Equal(new FileInfo(db).Length + stored + 14, s.RecordingBytes);   // the db, the copy and the csv
-        Assert.Equal("Recording paused: limit reached (1 MB)", ScsKiller.PausedNote(k.Settings));
+        Assert.Equal("录制已暂停：达到容量上限（1 MB）", ScsKiller.PausedNote(k.Settings));
         Assert.Contains($"max_db_bytes={(1 << 20) - stored}\r\n", File.ReadAllText(ini));
 
         held.Dispose();   // the game exits: the db is emptied, recording goes on
@@ -5732,7 +5735,7 @@ public partial class AppTests : IDisposable
         Assert.Equal(plus, s.Game.ExePath);
         Assert.Null(s.RecorderRefused);
         Assert.False(ScsKiller.NeverRecorded(s));
-        Assert.Equal("Recorder on: play 5 minutes", Format.ShortNote(s));
+        Assert.Equal("录制器已开启：请游玩约 5 分钟", Format.ShortNote(s));
 
         s = await Launch(picked, "not armed");
         Assert.Equal(picked, s.Game.ExePath);
@@ -5947,6 +5950,7 @@ public partial class AppTests : IDisposable
         Assert.Equal(AppStore.DefaultSettings, store.LoadSettings());
         Assert.Equal(new Settings(Environment.ProcessorCount, WarmPriority.BelowNormal, DriverUpdateMode.Ask, 8, true),
             AppStore.DefaultSettings);
+        Assert.False(AppStore.DefaultSettings.UseCommunityDb);
         Assert.False(AppStore.DefaultSettings.ShareRecordings);   // opt-in: off until the user ticks it
         Assert.False(AppStore.DefaultSettings.SharePromptDismissed);
         Assert.False(AppStore.DefaultSettings.TrayNoticeShown);
@@ -5959,11 +5963,11 @@ public partial class AppTests : IDisposable
             File.ReadAllText(Path.Combine(_root, "data", "settings.json")), @",\s*""StartWithWindows"": true", ""));
         Assert.DoesNotContain("StartWithWindows", File.ReadAllText(Path.Combine(_root, "data", "settings.json")));
         Assert.True(store.LoadSettings().StartWithWindows);
-        // the community database is on by default, also for a settings.json that saved the old, never settable CommunityPlans
+        // An old CommunityPlans value does not silently opt this fork into an upstream service.
         File.WriteAllText(Path.Combine(_root, "data", "settings.json"), File.ReadAllText(Path.Combine(_root, "data", "settings.json"))
             .Replace("\"UseCommunityDb\": true", "\"CommunityPlans\": false"));
         Assert.Contains("CommunityPlans", File.ReadAllText(Path.Combine(_root, "data", "settings.json")));
-        Assert.True(store.LoadSettings().UseCommunityDb);
+        Assert.False(store.LoadSettings().UseCommunityDb);
 
         var plan = new Plan("steam:1", "hash", "PCD3D_SM6", "nvidia-1", new PlanStats(10, 20, 3, 4, true), @"C:\x\plan.bin");
         var rec = new GameRecord
@@ -6126,7 +6130,7 @@ public partial class AppTests : IDisposable
         await k.WhenQueueIdle().WaitAsync(TimeSpan.FromSeconds(10));
         Assert.Equal(QueueStage.Done, k.Queue.Single().Stage);   // the rest compiled
         var s = k.Games.Single();
-        Assert.Equal((GameStatus.Warmed, true, "Ray tracing needs a 5-min recording"), (s.Status, ScsKiller.RtAfterRecording(s), Format.ShortNote(s)));
+        Assert.Equal((GameStatus.Warmed, true, "光追还需要约 5 分钟录制"), (s.Status, ScsKiller.RtAfterRecording(s), Format.ShortNote(s)));
         Assert.True(ScsKiller.RtAfterRecording(s with { StatusReason = "光追需要录制" }));
         Assert.EndsWith("; " + ScsKiller.RtAfterRecordingNote, s.StatusReason);
 
@@ -6183,7 +6187,7 @@ public partial class AppTests : IDisposable
         Assert.True(k.Queue.Single().PlanCheck);
         Assert.Equal((GameStatus.Ready, (long?)1_193), (s.Status, s.Plan!.RtInline));
         Assert.EndsWith("; " + ScsKiller.RtInlineNote, s.StatusReason);
-        Assert.Equal("Path tracing needs a recording", Format.ShortNote(s));
+        Assert.Equal("路径追踪需要录制", Format.ShortNote(s));
     }
 
     /// <summary>A plan that asks for a ray tracing recording, then a detection that says the game builds no state object
@@ -6271,7 +6275,7 @@ public partial class AppTests : IDisposable
         Assert.Equal((GameStatus.Ready, true, false), (s.Status, s.RtToPlan, ScsKiller.NeedsRtRecording(s)));   // nothing asked while its plan waits
         Assert.True(k.Queue.Single().PlanCheck);
         Assert.True(ScsKiller.RecordedEnough(s));
-        Assert.Equal("X", Format.ShortNote(s with { Status = GameStatus.NeedsRecording, RecorderInstalled = true, StatusReason = "x" }));   // what's missing, not 5 minutes again
+        Assert.Equal("录制数据仍不足", Format.ShortNote(s with { Status = GameStatus.NeedsRecording, RecorderInstalled = true, StatusReason = "x" }));   // what's missing, not 5 minutes again
 
         k.IdleTime = () => TimeSpan.FromHours(1);
         await k.WhenQueueIdle().WaitAsync(TimeSpan.FromSeconds(10));
@@ -6285,7 +6289,7 @@ public partial class AppTests : IDisposable
         }
         Assert.Equal((12_000L, true), (s.Plan!.RtUncovered, s.RtUnseen));   // the page's count stays honest
         Assert.EndsWith("; " + ScsKiller.RtUnseenNote, s.StatusReason);
-        Assert.Equal("No ray tracing seen while recording", Format.ShortNote(s));
+        Assert.Equal("录制中未观察到光追", Format.ShortNote(s));
 
         Launch(1, "20.0,G,0,0,1.0");   // a later short launch: 5 minutes were recorded already
         await k.ScanAsync(default);
@@ -8730,7 +8734,7 @@ public partial class AppTests : IDisposable
             k.RefreshGame(_game.Id);
             var s = k.Games.Single();
             Assert.Equal((GameStatus.Unsupported, note, false, notPlanned), (s.Status, s.StatusReason, s.CompileUnreached, s.NotPlanned));
-            Assert.Equal(note, Format.ShortNote(s));
+            Assert.Equal("需要更新 SCSKiller 才能支持此游戏", Format.ShortNote(s));
         }
         finally { Core.Games.GameVerdicts.Current = Core.Games.GameVerdicts.Embedded; }
     }
@@ -9703,10 +9707,10 @@ public partial class AppTests : IDisposable
         const long G = 1L << 30;
         Assert.Null(AmdAppCache.QueueWarning(10 * G, [("A", 4 * G), ("B", 2 * G)]));   // exactly the 6 GB free
         Assert.Null(AmdAppCache.QueueWarning(10 * G, []));
-        Assert.Equal("This queue adds about 7 GB to the shader cache (A 4 GB, B 3 GB), 1 GB more than the 6 GB free under the AMD driver's fixed 16 GB limit. "
-            + "The driver then trims the least recently used caches, older games' included, and those games stutter until compiled again.",
+        Assert.Equal("此队列预计增加约 7 GB 着色器缓存（A 4 GB，B 3 GB），比 AMD 驱动固定上限 16 GB 下的剩余空间 6 GB 多 1 GB。"
+            + "驱动随后会清理较久未使用的缓存，包括其他游戏；相关游戏重新编译前可能再次卡顿。",
             AmdAppCache.QueueWarning(10 * G, [("A", 4 * G), ("B", 3 * G), ("Warmed", 0)]));
-        Assert.Contains("more than the 0 MB free", AmdAppCache.QueueWarning(17 * G, [("A", 512L << 20)]));   // already past the cap
+        Assert.Contains("剩余空间 0 MB 多", AmdAppCache.QueueWarning(17 * G, [("A", 512L << 20)]));   // already past the cap
         Assert.Equal(16 * G, AmdAppCache.DxcCacheCap);
     }
 
@@ -9717,13 +9721,13 @@ public partial class AppTests : IDisposable
     {
         const long G = 1L << 30;
         (long, long)[] huge = [(2 * G, 2 * G), (30 * G, 32 * G)];
-        const string Cost = "Very large caches can make the game start slower and use more memory.";
-        Assert.Equal($"This compile adds about 32 GB and takes the cache past your 16 GB limit, so older games may be evicted. {Cost}",
+        const string Cost = "超大缓存可能使游戏启动变慢并增加内存占用。";
+        Assert.Equal($"此次编译预计增加约 32 GB，使缓存超过 16 GB 上限；较早游戏的缓存可能被清理。{Cost}",
             ScsKiller.QueueCacheWarning(huge, 5 * G, 34 * G, 16 * G, GpuVendor.Nvidia));   // 1: over the limit
-        Assert.Equal($"This compile adds about 32 GB. {Cost}", ScsKiller.QueueCacheWarning(huge, 5 * G, 34 * G, 100 * G, GpuVendor.Nvidia));   // 2: within it
-        Assert.Equal($"This compile adds about 32 GB. {Cost}", ScsKiller.QueueCacheWarning(huge, 5 * G, 34 * G, null, GpuVendor.Nvidia));   // no limit
+        Assert.Equal($"此次编译预计增加约 32 GB 缓存。{Cost}", ScsKiller.QueueCacheWarning(huge, 5 * G, 34 * G, 100 * G, GpuVendor.Nvidia));   // 2: within it
+        Assert.Equal($"此次编译预计增加约 32 GB 缓存。{Cost}", ScsKiller.QueueCacheWarning(huge, 5 * G, 34 * G, null, GpuVendor.Nvidia));   // no limit
         (long, long)[] small = [(4 * G, 4 * G), (6 * G, 6 * G)];
-        Assert.Equal("After this queue the cache is close to its 16 GB limit, older games may be evicted.",
+        Assert.Equal("完成此队列后，缓存将接近 16 GB 上限；较早游戏的缓存可能被清理。",
             ScsKiller.QueueCacheWarning(small, 5 * G, 10 * G, 16 * G, GpuVendor.Nvidia));   // 3: 15 of 16 GB
         Assert.Null(ScsKiller.QueueCacheWarning(small, 2 * G, 10 * G, 16 * G, GpuVendor.Nvidia));   // 12 of 16 GB
         Assert.Null(ScsKiller.QueueCacheWarning([], 15 * G, 0, 16 * G, GpuVendor.Nvidia));   // nothing queued
@@ -9736,13 +9740,13 @@ public partial class AppTests : IDisposable
     {
         const long G = 1L << 30;
         (long, long)[] queue = [(2 * G, 2 * G), (60 * G, 64 * G + G / 2), (20 * G, 20 * G)];   // the largest growth; its estimate rounds up
-        const string Text = "This compile adds about 65 GB. Very large caches can make the game start slower and use more memory.";
-        Assert.Equal(Text + " It's more than the AMD driver's 16 GB cache can hold.", ScsKiller.LargeCompileWarning(queue, GpuVendor.Amd));
+        const string Text = "此次编译预计增加约 65 GB 缓存。超大缓存可能使游戏启动变慢并增加内存占用。";
+        Assert.Equal(Text + "已超过 AMD 驱动 16 GB 的固定缓存上限。", ScsKiller.LargeCompileWarning(queue, GpuVendor.Amd));
         Assert.Equal(Text, ScsKiller.LargeCompileWarning(queue, GpuVendor.Nvidia));
         Assert.Equal("32.2 GB", Format.Bytes(34_600_000_000));   // the Library's estimate, in the same units
-        Assert.Equal("This compile adds about 32 GB. Very large caches can make the game start slower and use more memory.",
+        Assert.Equal("此次编译预计增加约 32 GB 缓存。超大缓存可能使游戏启动变慢并增加内存占用。",
             ScsKiller.LargeCompileWarning([(17 * G, 34_600_000_000)], GpuVendor.Nvidia));
-        Assert.Contains("about 20 GB.", ScsKiller.LargeCompileWarning([(17 * G, 40 * G), (20 * G, 20 * G)], GpuVendor.Nvidia));   // the game that adds the most, not the largest estimate
+        Assert.Contains("约 20 GB 缓存", ScsKiller.LargeCompileWarning([(17 * G, 40 * G), (20 * G, 20 * G)], GpuVendor.Nvidia));   // the game that adds the most, not the largest estimate
         Assert.Null(ScsKiller.LargeCompileWarning([(2 * G, 2 * G), (16 * G, 30 * G)], GpuVendor.Amd));   // growth at the cap: estimate alone doesn't trigger
         Assert.Null(ScsKiller.LargeCompileWarning([], GpuVendor.Nvidia));
     }
@@ -10950,7 +10954,7 @@ public partial class AppTests : IDisposable
         var k = Killer(new FakeReader(Unreal with { Version = "5.4", Fork = "GAME_OnlyThisTest" }), new Planner());
         var s = (await k.ScanAsync(default)).Single();
         Assert.Equal((GameStatus.Ready, Planner.UntestedNote), (s.Status, s.StatusReason));
-        Assert.Equal("Not tested on this engine version", Format.ShortNote(s));
+        Assert.Equal("此引擎版本尚未测试", Format.ShortNote(s));
     }
 
     /// <summary>A scan keeps the planner's check; an engine the server's list confirms afterwards loses its note without a rescan.</summary>
@@ -11036,7 +11040,7 @@ public partial class AppTests : IDisposable
             var k = Killer(new FakeReader(Unreal), new FakePlanner(records: [new('B', [.. new byte[20], 9]), new('P', [1]), new('C', [3])]), game: game);
             await k.ScanAsync(default);
             Assert.True(k.Games.Single() is { Status: GameStatus.Ready, NoStutter: not null });
-            Assert.Equal("Compiling isn't needed", Format.ShortNote(k.Games.Single() with { Status = GameStatus.NeedsRecording }));
+            Assert.Equal("无需编译", Format.ShortNote(k.Games.Single() with { Status = GameStatus.NeedsRecording }));
             k.Enqueue(game.Id);
             k.StartQueue();
             await k.WhenQueueIdle().WaitAsync(TimeSpan.FromSeconds(10));
@@ -11411,7 +11415,7 @@ public partial class AppTests : IDisposable
         var s = k.Games.Single();
         Assert.Equal((GameStatus.Unsupported, "RenoDX", true, ScsKiller.ShaderModReason("RenoDX", LayerBlock.NotBesideExe), ScsKiller.SkipShaderMod),
             (s.Status, s.ShaderMod, s.ShaderModBlocks, s.StatusReason, s.RecorderSkip));
-        Assert.Equal("RenoDX changes all its pipelines", Format.ShortNote(s));
+        Assert.Equal("RenoDX 会改变全部管线", Format.ShortNote(s));
 
         k.Enqueue(id);
         k.StartQueue();
@@ -11977,7 +11981,7 @@ public partial class AppTests : IDisposable
     }
 
     [Fact]
-    public async Task Shared_upscaler_packs_download_for_everyone_signed_out_and_only_for_a_dll_this_pc_has()
+    public async Task Shared_upscaler_packs_download_after_opt_in_even_while_signed_out_and_only_for_a_dll_this_pc_has()
     {
         var shader = SCSKiller.Tests.Planning.MiddlewarePackTests.Container("DXIL", "ffx a");
         var dll = SCSKiller.Tests.Planning.MiddlewarePackTests.Pe("amd_fidelityfx_dx12.dll", shader);
@@ -11990,7 +11994,7 @@ public partial class AppTests : IDisposable
         var data = Path.Combine(_root, "data");
         var planner = new Planner(Path.Combine(data, "packs"), ScsKiller.SharedPackDir(data, GpuVendor.Nvidia));
         var k = Killer(new FakeReader(Unreal), planner, vendor: new FakeVendor(Gpu with { Vendor = GpuVendor.Nvidia }));
-        k.Settings = k.Settings with { UseCommunityDb = false };   // the setting is about the recordings only
+        k.Settings = k.Settings with { UseCommunityDb = false };   // no upstream request until explicitly enabled
         await k.SettingsRefresh;
         k.Community = new Community(data, (_, _) => Task.FromResult<string?>(null), new RouteFailover(fake, [new("https://api.test.com/")]));   // signed out
 
@@ -11999,9 +12003,12 @@ public partial class AppTests : IDisposable
         await k.CommunitySync;
         Assert.Empty(fake.Log);
 
-        // a version the manifest has no pack for: the list only
+        // a version the manifest has no pack for: still no upstream request while off
         File.WriteAllBytes(Path.Combine(_exeDir, "amd_fidelityfx_dx12.dll"), SCSKiller.Tests.Planning.MiddlewarePackTests.Pe("amd_fidelityfx_dx12.dll"));
         await k.ScanAsync(default);
+        await k.CommunitySync;
+        Assert.Empty(fake.Log);
+        k.Settings = k.Settings with { UseCommunityDb = true };
         await k.CommunitySync;
         Assert.Equal(["GET https://api.test.com/v1/manifest/0"], fake.Log);
 
@@ -12041,8 +12048,6 @@ public partial class AppTests : IDisposable
         var data = Path.Combine(_root, "data");
         var planner = new Planner(Path.Combine(data, "packs"), ScsKiller.SharedPackDir(data, GpuVendor.Nvidia));
         var k = Killer(new FakeReader(Unreal), planner, vendor: new FakeVendor(Gpu with { Vendor = GpuVendor.Nvidia }));
-        k.Settings = k.Settings with { UseCommunityDb = false };
-        await k.SettingsRefresh;
         k.Community = new Community(data, (_, _) => Task.FromResult<string?>(null), new RouteFailover(fake, [new("https://api.test.com/")], clock), clock);
         var rec = k.Store.LoadGame(_game.Id);   // compiled before the packs came
         (rec.WarmedAt, rec.Plan) = (DateTimeOffset.Now, new Plan(_game.Id, "content-1", "PCD3D_SM6", "fake-1", new PlanStats(0, 0, 0, 0, false), Path.Combine(_root, "none.bin")));
@@ -12915,7 +12920,7 @@ public partial class AppTests : IDisposable
     }
 
     [Fact]
-    public async Task A_community_recording_not_in_use_doesnt_hide_what_a_pack_brings()
+    public async Task Turning_off_community_data_stops_pack_downloads_and_ignores_existing_recordings()
     {
         var clock = new CommunityTests.Clock { Now = DateTimeOffset.UtcNow };
         var (k, _, a, _, publish) = PackGame(clock);
@@ -12936,7 +12941,7 @@ public partial class AppTests : IDisposable
         publish(a);
         k.StartCommunitySync();
         await k.CommunitySync;
-        Assert.Equal(1, k.Games.Single().RecordedSinceWarm);
+        Assert.Equal(0, k.Games.Single().RecordedSinceWarm);
     }
 
     [Fact]

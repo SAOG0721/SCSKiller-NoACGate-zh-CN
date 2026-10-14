@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-Builds dist\SCSKiller\ and dist\SCSKiller.zip:
+Builds dist\SCSKiller-NoACGate-zh-CN\ and dist\SCSKiller-NoACGate-zh-CN.zip:
 
   SCSKiller.exe            WinUI app, self-contained (.NET + Windows App SDK), + oodle-data-shared.dll, zlib-ng2.dll
   cli\scskiller.exe        command line, self-contained, same Core project and commit, + the two codec DLLs
@@ -36,10 +36,13 @@ if ($Version -and (Get-Content (Join-Path $repo "src\SCSKiller.Core\App\ContentT
 }
 $versionArgs = if ($Version) { @("-p:Version=$Version", "-p:IncludeSourceRevisionInInformationalVersion=false") } else { @() }
 Write-Host "version: $(if ($Version) { $Version } else { '0.0.0-internal.0 (dev)' })"
-$dotnet = Join-Path $env:LOCALAPPDATA "Microsoft\dotnet\dotnet.exe"   # .NET 10 SDK is per user; PATH may have an older one
+$dotnet = Join-Path $env:LOCALAPPDATA "Codex\SCSKiller-dotnet10\dotnet.exe"
+if (-not (Test-Path $dotnet) -and $env:DOTNET_ROOT) { $dotnet = Join-Path $env:DOTNET_ROOT "dotnet.exe" }
+if (-not (Test-Path $dotnet)) { $dotnet = Join-Path $env:LOCALAPPDATA "Microsoft\dotnet\dotnet.exe" }
 if (-not (Test-Path $dotnet)) { $dotnet = "dotnet" }
 $dist = Join-Path $repo "dist"
-$out = Join-Path $dist "SCSKiller"
+$artifactName = "SCSKiller-NoACGate-zh-CN"
+$out = Join-Path $dist $artifactName
 $cli = Join-Path $out "cli"
 $native = Join-Path $out "native"
 
@@ -138,19 +141,19 @@ $expected = "SCSKiller.exe", "oodle-data-shared.dll", "zlib-ng2.dll", "cli\scski
     "THIRD-PARTY-NOTICES.md", "LICENSE", "LICENSE-EXCEPTION.txt", "notices\dotnet-THIRD-PARTY-NOTICES.txt"
 if ($NoOodle) { $expected = $expected | Where-Object { $_ -notlike "*oodle-data-shared.dll" } }
 $missing = $expected | Where-Object { -not (Test-Path (Join-Path $out $_)) }
-if ($missing) { throw "dist\SCSKiller is missing: $($missing -join ', ')" }
-if ($NoOodle -and (Get-ChildItem $out -Recurse -Filter "oodle-data-shared.dll")) { throw "-NoOodle, but oodle-data-shared.dll is in dist\SCSKiller" }
+if ($missing) { throw "$artifactName is missing: $($missing -join ', ')" }
+if ($NoOodle -and (Get-ChildItem $out -Recurse -Filter "oodle-data-shared.dll")) { throw "-NoOodle, but oodle-data-shared.dll is in $artifactName" }
 foreach ($rc in "SCSKiller.runtimeconfig.json", "cli\scskiller.runtimeconfig.json") {
     if ((Get-Content (Join-Path $out $rc) -Raw) -notmatch '"includedFrameworks"') { throw "$rc is framework-dependent" }
 }
 
-# 6. zip (with the SCSKiller\ folder at its root)
+# 6. zip (with the fork-named folder at its root)
 if (-not $NoZip) {
-    $zip = Join-Path $dist "SCSKiller.zip"
+    $zip = Join-Path $dist "$artifactName.zip"
     if (Test-Path $zip) { Remove-Item $zip }
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     [IO.Compression.ZipFile]::CreateFromDirectory($out, $zip, [IO.Compression.CompressionLevel]::Optimal, $true)
 }
-$msg = "dist\SCSKiller: {0:N0} MB" -f ((Get-ChildItem $out -Recurse -File | Measure-Object Length -Sum).Sum / 1MB)
-if (-not $NoZip) { $msg += ", dist\SCSKiller.zip: {0:N0} MB" -f ((Get-Item $zip).Length / 1MB) }
+$msg = "dist\${artifactName}: {0:N0} MB" -f ((Get-ChildItem $out -Recurse -File | Measure-Object Length -Sum).Sum / 1MB)
+if (-not $NoZip) { $msg += ", dist\${artifactName}.zip: {0:N0} MB" -f ((Get-Item $zip).Length / 1MB) }
 Write-Host $msg

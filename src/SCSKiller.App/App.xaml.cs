@@ -71,10 +71,8 @@ public partial class App : Application
         {
             real.Community = new Community(AppStore.DefaultDir, Account.GetDbTokenAsync);
             real.Sharing = new Sharing(AppStore.DefaultDir, () => real.Settings.ShareRecordings);   // anonymous: never the Patreon sign-in
-            real.ContentRoutes = RouteFailover.Default;
-            real.ChannelAccess = async () => (await Account.GetAccessTokenAsync(), Account.Status?.Ent);
-            // the entitlements first: the update check picks the channel they allow
-            real.UserFetch = async () => { await Account.RefreshAsync(); await Updater.CheckAsync(); };
+            // The fork has no signed content feed yet. Embedded rules remain available without contacting upstream.
+            // Patreon community and sharing are separate, explicitly chosen services below.
             // not before the welcome, which says it is sent and where to turn it off
             real.ActiveCheck = new ActiveCheck(AppStore.DefaultDir, () => real.Settings is { ActiveCheck: true, WelcomeSeen: true }, real.Vendor.Vendor);
             // not in the unattended --driver-updated launch: nobody at the PC, no game folder is written
@@ -414,7 +412,7 @@ public partial class App : Application
             .AddArgument("action", "open")
             .AddText($"{Fmt.Vendor(Core.Vendor.Vendor)} 显卡驱动已更新")
             .AddText($"驱动 {Core.Vendor.Gpu.DriverVersion} 清除了着色器缓存。{stale.Count} 款游戏需要重新编译：" +
-                     $"{string.Join("、", stale.Select(g => g.Game.Name))}" + (time > TimeSpan.Zero ? $"；预计 {Format.Duration(time)}。" : "。"))
+                     $"{string.Join("、", stale.Select(g => g.Game.Name))}" + (time > TimeSpan.Zero ? $"；预计 {Fmt.Duration(time)}。" : "。"))
             .AddButton(new AppNotificationButton("立即编译").AddArgument("action", "now"))
             .AddButton(new AppNotificationButton("空闲时编译").AddArgument("action", "idle"))
             .AddButton(new AppNotificationButton("跳过").AddArgument("action", "skip"))

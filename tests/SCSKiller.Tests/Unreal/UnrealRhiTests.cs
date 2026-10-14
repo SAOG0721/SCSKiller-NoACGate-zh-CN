@@ -77,16 +77,16 @@ public class UnrealRhiTests(ITestOutputHelper output)
 
     /// <summary>The game page's note: a guessed version matters on DirectX 12 (root signatures), not on a confirmed DirectX 11.</summary>
     [Theory]
-    [InlineData(true, false, "D3D12", "Unreal version guessed")]
-    [InlineData(true, false, "D3D12 (launch option)", "Unreal version guessed")]
-    [InlineData(true, false, UnrealRhi.Ambiguous, "Unreal version guessed")]
-    [InlineData(false, true, "D3D11", "DirectX guessed")]
-    [InlineData(false, true, "D3D12", "DirectX guessed")]
-    [InlineData(true, true, "D3D11", "Unreal version and DirectX guessed")]
+    [InlineData(true, false, "D3D12", "Unreal 版本")]
+    [InlineData(true, false, "D3D12 (launch option)", "Unreal 版本")]
+    [InlineData(true, false, UnrealRhi.Ambiguous, "Unreal 版本")]
+    [InlineData(false, true, "D3D11", "DirectX 模式")]
+    [InlineData(false, true, "D3D12", "DirectX 模式")]
+    [InlineData(true, true, "D3D11", "Unreal 版本和 DirectX 模式")]
     [InlineData(true, false, "D3D11", null)]
     [InlineData(false, false, "D3D12", null)]
     public void GuessNote(bool version, bool api, string graphicsApi, string? note) =>
-        Assert.Equal(note == null ? null : note + ", so the compile could be wrong.",
+        Assert.Equal(note == null ? null : note + "是推测值，编译结果可能不准确。",
             ScsKiller.GuessNote(new EngineInfo("Unreal", "5.1", null, graphicsApi, false, null, VersionGuessed: version, ApiGuessed: api)));
 
     /// <summary>Dead Island 2: its engine's BaseEngine.ini sets DX12 and the project doesn't override it.</summary>

@@ -27,17 +27,17 @@ public static class Format
 
     /// <summary>"FSR4: 80 known pipelines, compiled with the game", "DLSS: compiled by the NVIDIA driver itself",
     /// "XeSS: detected; added after a recording sees them".</summary>
-    public static string Middleware(MiddlewareTag t) => t.Label + (t.Pipelines > 0 ? $": {t.Pipelines:N0} known pipelines, compiled with the game"
-        : t.Label == "DLSS" ? ": compiled by the NVIDIA driver itself" : ": detected; added after a recording sees them");
+    public static string Middleware(MiddlewareTag t) => t.Label + (t.Pipelines > 0 ? $"：已知 {t.Pipelines:N0} 条管线，会随游戏一起编译"
+        : t.Label == "DLSS" ? "：由 NVIDIA 驱动自行编译" : "：已检测到，录制识别后可加入编译");
 
     /// <summary>The Library's notice that this GPU can't compile; null on NVIDIA and AMD, or once closed for this GPU
     /// (<paramref name="dismissedFor"/>: <see cref="Settings.GpuNoticeDismissed"/>).</summary>
     public static string? GpuNotice(GpuInfo gpu, string? dismissedFor) => gpu.Vendor is GpuVendor.Nvidia or GpuVendor.Amd || dismissedFor == gpu.Name ? null
         : gpu.Vendor switch
         {
-            GpuVendor.Intel => "SCSKiller doesn't compile on Intel GPUs yet: how Intel's driver caches shaders hasn't been measured. Support is planned.",
-            GpuVendor.Qualcomm => "SCSKiller doesn't compile on Qualcomm GPUs yet: how Qualcomm's driver caches shaders hasn't been measured.",
-            _ => "SCSKiller doesn't compile on this GPU yet: it only knows how NVIDIA and AMD drivers cache shaders.",
+            GpuVendor.Intel => "SCSKiller 暂不支持在 Intel 显卡上编译：尚未完成其驱动着色器缓存行为的测量，后续计划支持。",
+            GpuVendor.Qualcomm => "SCSKiller 暂不支持在 Qualcomm 显卡上编译：尚未完成其驱动着色器缓存行为的测量。",
+            _ => "SCSKiller 暂不支持在此显卡上编译：目前只了解 NVIDIA 与 AMD 驱动的着色器缓存机制。",
         };
 
     /// <summary>A Library row's note: a few words for the status's reason (the whole one is in the row's tooltip and on the
@@ -51,69 +51,135 @@ public static class Format
         var partly = ScsKiller.IsPartlyWarmed(s);
         return s.Status switch
         {
-            _ when s.CompileUnreached => "This game needs a custom loader",
-            GameStatus.Warmed when ScsKiller.IsPartlyCompiled(s) => Sentence(ScsKiller.PartlyCompiledNote(s)),
-            GameStatus.Warmed when partly => $"Driver {s.WarmedDriverVersion} · {s.Careful!.LaunchCompiled * 100:0}% still compiled",
-            GameStatus.Warmed when ScsKiller.RtAfterRecording(s) && s.NoStutter == null => s.RecorderInstalled ? "Recorder on: play with ray tracing"
-                : ScsKiller.RecordedEnough(s) ? "Ray tracing needs a recording" : "Ray tracing needs a 5-min recording",
-            GameStatus.Warmed when ScsKiller.BothApis(s.Plan) => "DirectX 11 and 12" + (ScsKiller.IsPartial(s.Plan) ? " · partly covered" : ""),
-            GameStatus.Warmed => $"Driver {s.WarmedDriverVersion}" + (ScsKiller.IsPartial(s.Plan) ? " · partly covered" : ""),
+            _ when s.CompileUnreached => "此游戏需要专用加载方式",
+            GameStatus.Warmed when ScsKiller.IsPartlyCompiled(s) => $"驱动跳过了 {(s.LastWarmFailed ?? 0) + (s.LastWarmCrashed ?? 0):N0} / {ScsKiller.PlanItems(s.Plan) ?? 0:N0} 条管线",
+            GameStatus.Warmed when partly => $"驱动 {s.WarmedDriverVersion} · 首次启动仍编译了 {s.Careful!.LaunchCompiled * 100:0}%",
+            GameStatus.Warmed when ScsKiller.RtAfterRecording(s) && s.NoStutter == null => s.RecorderInstalled ? "录制器已开启：请启用光追并游玩"
+                : ScsKiller.RecordedEnough(s) ? "光追仍需要录制" : "光追还需要约 5 分钟录制",
+            GameStatus.Warmed when ScsKiller.BothApis(s.Plan) => "DirectX 11 和 12" + (ScsKiller.IsPartial(s.Plan) ? " · 部分覆盖" : ""),
+            GameStatus.Warmed => $"驱动 {s.WarmedDriverVersion}" + (ScsKiller.IsPartial(s.Plan) ? " · 部分覆盖" : ""),
             GameStatus.Stale => StaleNote(r),
-            GameStatus.NeedsRecording when s.ReasonFlags.HasFlag(GameReasonFlags.OfflineSessionRequired) => r,
-            GameStatus.NeedsRecording when s.NoStutter != null && !s.RecorderInstalled => "Compiling isn't needed",
-            GameStatus.NeedsRecording when s.RecordingPaused => "Recording paused: limit reached",
+            GameStatus.NeedsRecording when s.ReasonFlags.HasFlag(GameReasonFlags.OfflineSessionRequired) => "需要离线录制会话",
+            GameStatus.NeedsRecording when s.NoStutter != null && !s.RecorderInstalled => "无需编译",
+            GameStatus.NeedsRecording when s.RecordingPaused => "录制已达到容量上限",
             GameStatus.NeedsRecording when ScsKiller.NeverRecorded(s) => null,   // the title: ScsKiller.NothingRecordedTitle
-            GameStatus.NeedsRecording when s.RecorderInstalled && !ScsKiller.RecordedEnough(s) => Has(Planning.Planner.Dx12Only) ? "Recorder on: play on DirectX 12" : "Recorder on: play 5 minutes",
-            GameStatus.NeedsRecording when Starts(ScsKiller.RtNeedsRecording) => "For ray-traced effects" + (s.InCommunityDb == true ? " · in the community database" : ""),
-            GameStatus.NeedsRecording when s.InCommunityDb == true => "In the community database",
-            GameStatus.NeedsRecording when Starts("the recording has no draws") => "Play into the game world",
-            GameStatus.NeedsRecording when s.RecorderInstalled => Sentence(FirstClause(r)),
-            GameStatus.NeedsRecording when s.RecorderSkip != null => "Recorder not available",
-            GameStatus.NeedsRecording => "Turn on Record and play",
-            GameStatus.Ready when Has("ray-traced effects aren't compiled") => s.AntiCheat == AntiCheat.None ? "Ray tracing not compiled" : $"Ray tracing blocked by {AntiCheatName(s.AntiCheat)}",
-            GameStatus.Ready when Has(ScsKiller.RtUnseenNote) => "No ray tracing seen while recording",
-            GameStatus.Ready when Has(ScsKiller.RtInlineNote) => "Path tracing needs a recording",
-            GameStatus.Ready when ScsKiller.IsPartial(s.Plan) => "Partly covered",
-            GameStatus.Ready when Has(Planning.Planner.UntestedNote) => "Not tested on this engine version",
-            GameStatus.Ready when Has("for DirectX 12, ") => "DirectX 11; DirectX 12 needs a recording",
-            GameStatus.Ready when Has("also compiles every DirectX 11 shader") => "DirectX 11 and 12",
+            GameStatus.NeedsRecording when s.RecorderInstalled && !ScsKiller.RecordedEnough(s) => Has(Planning.Planner.Dx12Only) ? "录制器已开启：请用 DirectX 12 游玩" : "录制器已开启：请游玩约 5 分钟",
+            GameStatus.NeedsRecording when Starts(ScsKiller.RtNeedsRecording) => "用于光线追踪效果" + (s.InCommunityDb == true ? " · 社区数据库已有录制" : ""),
+            GameStatus.NeedsRecording when s.InCommunityDb == true => "社区数据库已有录制",
+            GameStatus.NeedsRecording when Starts("the recording has no draws") => "请进入游戏世界并游玩",
+            GameStatus.NeedsRecording when s.RecorderInstalled => "录制数据仍不足",
+            GameStatus.NeedsRecording when s.RecorderSkip != null => "录制器当前不可用",
+            GameStatus.NeedsRecording => "开启录制并游玩",
+            GameStatus.Ready when Has("ray-traced effects aren't compiled") => s.AntiCheat == AntiCheat.None ? "光追效果尚未编译" : $"光追录制受 {AntiCheatName(s.AntiCheat)} 限制",
+            GameStatus.Ready when Has(ScsKiller.RtUnseenNote) => "录制中未观察到光追",
+            GameStatus.Ready when Has(ScsKiller.RtInlineNote) => "路径追踪需要录制",
+            GameStatus.Ready when ScsKiller.IsPartial(s.Plan) => "部分覆盖",
+            GameStatus.Ready when Has(Planning.Planner.UntestedNote) => "此引擎版本尚未测试",
+            GameStatus.Ready when Has("for DirectX 12, ") => "DirectX 11 可编译；DirectX 12 需要录制",
+            GameStatus.Ready when Has("also compiles every DirectX 11 shader") => "DirectX 11 和 12",
             GameStatus.Ready when Starts("compiles every DirectX 11 shader") => "DirectX 11",
             GameStatus.Ready => null,
-            _ when s.ShaderModBlocks => $"{s.ShaderMod} changes all its pipelines",
-            _ when s.ReasonFlags.HasFlag(GameReasonFlags.AntiCheatRecordingBlocked) => $"Blocked by {AntiCheatName(s.AntiCheat)}" + (s.InCommunityDb == true ? " · in the community database" : ""),
-            _ when Has(ScsKiller.ManualNoRecording) => "Needs a recording: confirm its folder",
+            _ when s.ShaderModBlocks => $"{s.ShaderMod} 会改变全部管线",
+            _ when s.ReasonFlags.HasFlag(GameReasonFlags.AntiCheatRecordingBlocked) => $"需确认{AntiCheatName(s.AntiCheat)}录制风险" + (s.InCommunityDb == true ? " · 社区数据库已有录制" : ""),
+            _ when s.ReasonFlags.HasFlag(GameReasonFlags.CacheUnreachable) => "编译无法覆盖此游戏",
+            _ when Has(ScsKiller.ManualNoRecording) => "需要录制：请先确认游戏目录",
             _ when s.Engine?.Encrypted == true => null,   // the title: "Encrypted game files"
-            _ when s.Engine?.Unsupported is { } u => u.StartsWith("no D3D shaders", StringComparison.Ordinal) ? "No DirectX shaders" : "Engine not supported yet",
-            _ when s.Engine == null => r == "engine not supported yet" ? "Engine not supported yet" : "Couldn't read the game files",
-            _ when Starts("runs on ") => "Runs on " + FirstClause(r["runs on ".Length..]),
-            _ when Starts("not supported on this GPU") => "Not supported on this GPU yet",
-            _ => Sentence(FirstClause(r)),
+            _ when s.Engine?.Unsupported is { } u => u.StartsWith("no D3D shaders", StringComparison.Ordinal) ? "未找到 DirectX 着色器" : "引擎暂不支持",
+            _ when s.Engine == null => r == "engine not supported yet" ? "引擎暂不支持" : "无法读取游戏文件",
+            _ when Starts("runs on ") => "游戏使用 " + FirstClause(r["runs on ".Length..]),
+            _ when Starts("not supported on this GPU") => "此显卡暂不支持",
+            _ => Reason(s),
+        };
+    }
+
+    /// <summary>Player-facing reason. Core reasons remain stable for diagnostics and existing saved state.</summary>
+    public static string Reason(GameState s)
+    {
+        var r = s.StatusReason;
+        var db = s.InCommunityDb == true ? "；上游社区数据库已有此版本的录制数据" : "";
+        if (s.CompileUnreached) return "编译结果未进入此游戏使用的驱动缓存；此游戏可能需要专用加载方式";
+        if (ScsKiller.IsPartlyCompiled(s))
+            return $"驱动跳过了 {(s.LastWarmFailed ?? 0) + (s.LastWarmCrashed ?? 0):N0} 条管线，首次在游戏中使用时仍可能卡顿";
+        return s.Status switch
+        {
+            GameStatus.Warmed when ScsKiller.IsPartlyWarmed(s) => $"已为驱动 {s.WarmedDriverVersion} 部分预热；游戏首次启动仍编译了 {s.Careful!.LaunchCompiled * 100:0}% 的管线",
+            GameStatus.Warmed => $"已为驱动 {s.WarmedDriverVersion} 预热" + (ScsKiller.RtAfterRecording(s) ? "；光追效果还需录制" : ""),
+            GameStatus.Stale => StaleNote(r) + "；请重新编译",
+            GameStatus.NeedsRecording when s.ReasonFlags.HasFlag(GameReasonFlags.OfflineSessionRequired) => "此游戏需要离线录制会话；请在详情页阅读风险说明",
+            GameStatus.NeedsRecording when s.RecordingPaused => "录制达到容量上限并暂停；请调整上限或清空录制数据",
+            GameStatus.NeedsRecording when ScsKiller.NeverRecorded(s) => "上次游玩未录到数据；请查看详情页中的录制器状态",
+            GameStatus.NeedsRecording when r.StartsWith(ScsKiller.RtNeedsRecording, StringComparison.Ordinal) => "光追效果需要短时间录制" + db,
+            GameStatus.NeedsRecording when r.StartsWith("the recording has no draws", StringComparison.Ordinal) => "录制中尚无绘制数据；请进入游戏世界并游玩" + db,
+            GameStatus.NeedsRecording when s.RecorderInstalled => (ScsKiller.RecordedEnough(s)
+                ? "录制器已开启；继续游玩以收集仍缺少的管线" : RecorderOnNote(s)) + db,
+            GameStatus.NeedsRecording => "开启录制并正常游玩约 5 分钟，以收集编译所需的着色器布局" + db,
+            GameStatus.Ready when s.ReasonFlags.HasFlag(GameReasonFlags.PlannerUntested) => "此引擎版本的编译规则尚未验证；录制可帮助完善计划",
+            GameStatus.Ready when ScsKiller.IsPartial(s.Plan) => "可以编译已识别的部分；其余内容可能需要录制或在游玩时编译",
+            GameStatus.Ready => "已具备编译条件" + (r.Contains("DirectX 11", StringComparison.Ordinal) ? "；包含 DirectX 11 着色器" : ""),
+            _ when s.ReasonFlags.HasFlag(GameReasonFlags.AntiCheatRecordingBlocked) => $"需要录制，但检测到 {AntiCheatName(s.AntiCheat)}；请在详情页确认风险后选择是否录制" + db,
+            _ when s.ReasonFlags.HasFlag(GameReasonFlags.CacheUnreachable) => "编译无法覆盖此游戏使用的驱动缓存；可清理未使用的缓存以释放空间",
+            _ when s.ShaderModBlocks => $"{s.ShaderMod ?? "着色器模组"} 会改变全部管线，当前无法提前编译",
+            _ when s.Engine?.Encrypted == true => "游戏文件已加密，无法读取着色器",
+            _ when r.StartsWith("runs on ", StringComparison.Ordinal) => "游戏使用 " + r["runs on ".Length..],
+            _ when r.StartsWith("not supported on this GPU", StringComparison.Ordinal) => "此显卡暂不支持提前编译",
+            _ when r == "An app update is needed for support" => "需要更新 SCSKiller 才能支持此游戏",
+            _ when r.Contains("crashes this game or the driver", StringComparison.Ordinal) => "提前编译可能导致游戏或驱动崩溃，此游戏已标记为不支持",
+            _ when s.Engine?.Unsupported != null => "当前无法读取此游戏的着色器，暂不支持提前编译",
+            _ when s.Engine == null => "暂时无法识别或读取此游戏的引擎和着色器",
+            _ => "当前无法为此游戏生成可用的编译计划",
         };
     }
 
     /// <summary>A shader mod that doesn't block the game, after its reason: "; RenoDX changes this game's pipelines: ...".
     /// None for an unsupported game: its status and reason alone.</summary>
     public static string ModNote(GameState s) =>
-        s is { ShaderMod: not null, ShaderModBlocks: false } && s.Status != GameStatus.Unsupported ? "; " + ScsKiller.ShaderModNote(s) : "";
+        s is { ShaderMod: not null, ShaderModBlocks: false } && s.Status != GameStatus.Unsupported
+            ? s.ShaderModLayer
+                ? $"；{s.ShaderMod} 会改变游戏管线，编译会使用 ReShade 与模组的副本" +
+                    (s.ShaderModAsD3D12 ? "；游戏运行时新增的管线需开启“与 ReShade 一同录制”才能收集" : "；游戏运行时新增的管线会随游玩录制")
+                : $"；{s.ShaderMod} 会替换部分着色器，这些管线不会被提前编译"
+            : "";
 
     /// <summary>Recorder in, not long enough yet: the DirectX 12 hint stays, a DirectX 11 run never loads the recorder.</summary>
-    public static string RecorderOnNote(GameState s) => "recorder on: play for about 5 minutes"
-        + (s.StatusReason.Contains(Planning.Planner.Dx12Only, StringComparison.Ordinal) ? ", " + Planning.Planner.Dx12Only : "");
+    public static string RecorderOnNote(GameState s) => "录制器已开启：请游玩约 5 分钟"
+        + (s.StatusReason.Contains(Planning.Planner.Dx12Only, StringComparison.Ordinal) ? "；请使用 DirectX 12，游戏也可能以 DirectX 11 运行" : "");
+
+    public static string RecorderRefused(string reason)
+    {
+        if (reason == ScsKiller.NeverSawNote)
+            return "上次启动时录制器未加载；目前无法判断是游戏、反作弊还是其他工具的加载顺序造成。";
+        if (reason == ScsKiller.GameChangedNote)
+            return "游戏文件发生变化，录制器已重新设置；请再次启动。";
+        if (reason.StartsWith("The last launch ran ", StringComparison.Ordinal))
+            return "上次启动运行了与录制器设置时不同的执行文件；现已重新设置，请再次启动。";
+        const string prefix = "The last launch wasn't recorded: ";
+        if (!reason.StartsWith(prefix, StringComparison.Ordinal)) return reason;
+        var code = reason[prefix.Length..].TrimEnd('.');
+        return code switch
+        {
+            "anti-cheat next to the exe" => "代理检测到执行文件旁的反作弊组件，因此拒绝录制。",
+            "anti-cheat client loaded" => "代理检测到已加载的反作弊客户端，因此拒绝录制。",
+            "Riot Games install" => "代理检测到 Riot Games 安装目录，因此拒绝录制。",
+            "markers= malformed" => "代理的反作弊标记清单格式无效，因此拒绝录制。",
+            _ => $"代理拒绝录制（原因代码：{code}）。",
+        };
+    }
 
     static string StaleNote(string r) =>
-        r.StartsWith("driver changed:", StringComparison.Ordinal) ? $"Driver {r[(r.LastIndexOf(' ') + 1)..]} cleared its cache"
-        : r == ScsKiller.TrimmedPartReason ? "The driver trimmed its cache"
-        : r == ScsKiller.TrimmedAllReason ? "Its shader cache was removed"
-        : r.StartsWith("the compile didn't reach", StringComparison.Ordinal) ? "The compile missed the game's cache"
-        : r.StartsWith("the game runs as", StringComparison.Ordinal) ? "The exe name's case changed"
-        : r.StartsWith("game updated", StringComparison.Ordinal) ? "Game updated"
-        : r.StartsWith("game shaders changed", StringComparison.Ordinal) ? "Game shaders changed"
-        : r.StartsWith("SCSKiller can now compile", StringComparison.Ordinal) ? "SCSKiller can compile more"
-        : r.StartsWith("Maximum mode", StringComparison.Ordinal) ? "Maximum mode: more to compile"
-        : Sentence(FirstClause(r));   // "N new pipelines recorded"
+        r.StartsWith("driver changed:", StringComparison.Ordinal) ? $"驱动 {r[(r.LastIndexOf(' ') + 1)..]} 已清除缓存"
+        : r == ScsKiller.TrimmedPartReason ? "驱动清理了部分缓存"
+        : r == ScsKiller.TrimmedAllReason ? "着色器缓存已移除"
+        : r.StartsWith("the compile didn't reach", StringComparison.Ordinal) ? "编译未进入游戏使用的缓存"
+        : r.StartsWith("the game runs as", StringComparison.Ordinal) ? "执行文件名大小写已改变"
+        : r.StartsWith("game updated", StringComparison.Ordinal) ? "游戏已更新"
+        : r.StartsWith("game shaders changed", StringComparison.Ordinal) ? "游戏着色器已改变"
+        : r.StartsWith("SCSKiller can now compile", StringComparison.Ordinal) ? "SCSKiller 可编译更多内容"
+        : r.StartsWith("Maximum mode", StringComparison.Ordinal) ? "最大模式：还有内容待编译"
+        : r.Contains(" new pipeline", StringComparison.Ordinal) ? r[..r.IndexOf(" new ", StringComparison.Ordinal)] + " 条新管线"
+        : "编译状态已变化";
 
     static string FirstClause(string t) => t.Split([": ", "; ", " ("], 2, StringSplitOptions.None)[0];
     static string Sentence(string t) => t.Length > 0 ? char.ToUpperInvariant(t[0]) + t[1..] : t;
 
-    static string AntiCheatName(AntiCheat a) => a switch { AntiCheat.EasyAntiCheat => "EasyAntiCheat", AntiCheat.BattlEye => "BattlEye", _ => "anti-cheat" };
+    static string AntiCheatName(AntiCheat a) => a switch { AntiCheat.EasyAntiCheat => "EasyAntiCheat", AntiCheat.BattlEye => "BattlEye", _ => "反作弊组件" };
 }

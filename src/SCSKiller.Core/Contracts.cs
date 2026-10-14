@@ -341,8 +341,8 @@ public enum DriverUpdateMode { Ask, WhenIdle, Off }
 
 public sealed record Settings(int Threads, WarmPriority Priority, DriverUpdateMode OnDriverUpdate, int BackgroundThreads,
     bool PauseWhileGaming,
-    bool UseCommunityDb = true,   // download from the community shader hash database (signed in with "db") and use what was downloaded;
-                                  // renamed from CommunityPlans (never settable, saved false) so existing settings.json start on
+    bool UseCommunityDb = false,  // this fork connects to upstream community data only after explicit opt-in;
+                                  // renamed from CommunityPlans; existing saved choices remain as saved
     bool MaximumPlans = false,    // also plan every stage pairing, not just every stage (per-stage caches reuse a stage in any pairing)
     bool StartWithWindows = true,  // the app starts in the notification area at sign-in (WindowsStartup)
     int MaxCompileMemoryGB = 0,    // the warm's memory budget; 0 = Auto (ScsKiller.AutoCompileMemoryGB: from the PC's RAM)

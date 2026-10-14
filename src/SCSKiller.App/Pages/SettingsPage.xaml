@@ -141,7 +141,7 @@
                         <StackPanel Spacing="12">
                             <TextBlock Text="Patreon 与上游社区数据库" Style="{StaticResource Section}" />
                             <StackPanel Spacing="12" Visibility="{x:Bind Patreon.SignedOut, Mode=OneWay}">
-                                <TextBlock Text="上游项目的 Patreon 会员可使用社区着色器哈希数据库。请使用支持上游项目的 Patreon 账号登录。本 fork 尚未发布测试版或预览版更新。"
+                                <TextBlock Text="上游项目的 Patreon 会员可使用社区着色器哈希数据库。登录及开启下载后会连接上游服务；本 fork 默认关闭社区同步，也尚未发布测试版或预览版更新。"
                                            Style="{StaticResource Secondary}" TextWrapping="Wrap" />
                                 <StackPanel Orientation="Horizontal" Spacing="12">
                                     <Button Style="{StaticResource AccentButtonStyle}" Content="使用 Patreon 登录" Click="OnSignIn" IsEnabled="{x:Bind Patreon.Idle, Mode=OneWay}" />

@@ -120,12 +120,23 @@ static void BackgroundPriority()   // index/plan/materialize run in this process
     self.PriorityClass = ProcessPriorityClass.Idle;
 }
 
-static string StatusName(GameState s) => ScsKiller.NeedsOfflineSession(s) ? "NeedsOfflineSession" : s.Status.ToString();
+static string StatusName(GameState s) => ScsKiller.NeedsOfflineSession(s) ? "需要离线录制" : s.Status switch
+{
+    GameStatus.Warmed => "已预热", GameStatus.Ready => "可编译", GameStatus.NeedsRecording => "需要录制",
+    GameStatus.Stale => "需要重新编译", _ => "暂不支持",
+};
+
+static string AntiCheatName(AntiCheat antiCheat) => antiCheat switch
+{
+    AntiCheat.EasyAntiCheat => "EasyAntiCheat", AntiCheat.BattlEye => "BattlEye", _ => "其他反作弊",
+};
+
+static string StutterSeverityName(StutterSeverity severity) => severity == StutterSeverity.Severe ? "严重" : "中等";
 
 static string Hms(TimeSpan? t) => t?.ToString(@"h\:mm\:ss") ?? "-";
 
 static void Row(GameState s) =>
-    Console.WriteLine($"{StatusName(s),-19} {s.Game.Id,-24} {s.Game.Name}{(s.AntiCheat != AntiCheat.None ? $"  [{s.AntiCheat}]" : "")}{(s.KnownStutter is { } ks ? $"  [已知卡顿：{ks.Severity.ToString().ToLowerInvariant()}]" : "")}{(s.NoStutter != null ? "  [无着色器卡顿]" : "")}{(s.RecorderInstalled ? "  [录制器已安装]" : "")}{(s.CacheOnDisk is { } c ? $"  [缓存 {Format.Bytes(c)}]" : "")}  - {(ScsKiller.NeverRecorded(s) ? $"游玩过但未录到数据。{s.RecorderRefused}" : s.StatusReason)}");
+    Console.WriteLine($"{StatusName(s),-19} {s.Game.Id,-24} {s.Game.Name}{(s.AntiCheat != AntiCheat.None ? $"  [{AntiCheatName(s.AntiCheat)}]" : "")}{(s.KnownStutter is { } ks ? $"  [已知卡顿：{StutterSeverityName(ks.Severity)}]" : "")}{(s.NoStutter != null ? "  [无着色器卡顿]" : "")}{(s.RecorderInstalled ? "  [录制器已安装]" : "")}{(s.CacheOnDisk is { } c ? $"  [缓存 {Format.Bytes(c)}]" : "")}  - {Format.Reason(s)}");
 
 /// <summary>The tags' <see cref="Format.Middleware"/> lines joined with " · ", with the DLL names when <paramref name="dlls"/>.</summary>
 static string MiddlewareLine(IReadOnlyList<MiddlewareTag> tags, bool dlls) => string.Join(" · ", tags.Select(t =>
@@ -186,18 +197,18 @@ async Task<int> Status(string? query)
           执行文件  {g.Game.ExePath}
           实际进程  {(rec.LaunchedExeName is { } l0 ? $"{l0}（{rec.LaunchedExeSeenAt:yyyy-MM-dd HH:mm} 检测到）" : "尚未检测到")}；预热使用 {ScsKiller.WarmExeName(g.Game, rec)}
           游戏引擎  {(g.Engine is { } e ? string.Join(' ', new[] { Format.Engine(e) + (e.VersionGuessed ? "（推测）" : ""), e.Fork, e.GraphicsApi }.OfType<string>()) + (e.Encrypted ? "，文件已加密" : "") : "-")}
-          当前状态  {StatusName(g)}：{g.StatusReason}
-          反作弊    {g.AntiCheat}
+          当前状态  {StatusName(g)}：{Format.Reason(g)}
+          反作弊    {(g.AntiCheat == AntiCheat.None ? "未检测到" : AntiCheatName(g.AntiCheat))}
           着色器数  {g.ShaderCount?.ToString() ?? "-"}
           编译计划  {(g.Plan is { } p ? $"录制 {p.Recorded} + 生成 {p.Generated} + DirectX 11 着色器 {p.D3D11Shaders} + 中间件 {p.MiddlewareItems}；根签名 {p.RootSignatures}，规则已验证：{p.RootSigRuleVerified}" : "-")}
-          卡顿记录  {(g.KnownStutter is { } st ? $"已知卡顿（{st.Severity.ToString().ToLowerInvariant()}）：{st.Reason}（{st.Source}，核查于 {st.Date}）" : g.NoStutter is { } ns ? $"无着色器卡顿：{ns}" : "-")}
+          卡顿记录  {(g.KnownStutter is { } st ? $"已知卡顿（{StutterSeverityName(st.Severity)}）：{st.Reason}（{st.Source}，核查于 {st.Date}）" : g.NoStutter is { } ns ? $"无着色器卡顿：{ns}" : "-")}
           中间件    {(g.Middleware is { Count: > 0 } mw ? MiddlewareLine(mw, true) : "-")}
           预计占用  {(g.EstimatedCacheBytes is { } est ? Format.Bytes(est) : "-")} 缓存；预计耗时 {Hms(g.EstimatedWarmTime)}
           谨慎模式  {CarefulLine(g.Careful)}
           上次预热  {(g.WarmedAt is { } w ? $"{w:yyyy-MM-dd HH:mm}，驱动 {g.WarmedDriverVersion}，耗时 {Hms(g.LastWarmTime)}" + (ScsKiller.WarmCounts(g.LastWarmFailed ?? 0, g.LastWarmSkipped ?? 0, g.LastWarmCrashed ?? 0) is { } counts ? $"；{counts}" : "") : "从未预热")}
           驱动缓存  {(g.CacheOnDisk is { } c ? $"磁盘上 {Format.Bytes(c)}（预热或游戏打开过的驱动缓存文件）" : "-")}
           缓存键    {(rec.CacheKeys.Count > 0 ? string.Join(", ", rec.CacheKeys.Order()) : "-")}{(k.WarmAgs(g.Game.Id) is { } ags ? $"（编译时注册 AGS 程序名 {ags.App}，键 {k.AgsKey(g.Game.Id)}；执行文件名大小写不影响结果）" : AmdAppCache.IsNameHashed(rec.CacheKeys, ScsKiller.WarmExeName(g.Game, rec)) == false ? "（应用配置键，不是执行文件名哈希；名称大小写不影响结果）" : "")}
-          录制器    {(g.RecorderInstalled ? "已安装" : "未安装")}{(g.RecorderRefused is { } why ? $"；{(ScsKiller.NeverRecorded(g) ? "游玩过但未录到数据。" : "")}{why}" : "")}
+          录制器    {(g.RecorderInstalled ? "已安装" : "未安装")}{(g.RecorderRefused is { } why ? $"；{(ScsKiller.NeverRecorded(g) ? "游玩过但未录到数据。" : "")}{Format.RecorderRefused(why)}" : "")}
           录制数据  {(g.RecordingBytes > 0 ? $"{Format.Bytes(g.RecordingBytes)}（游戏目录文件及 SCSKiller 副本）" : "-")}；每个游戏上限 {ScsKiller.LimitText(k.Settings.RecordingLimitMB)}{(g.RecordingPaused ? $"；{ScsKiller.PausedNote(k.Settings)}" : "")}
           上次游玩  {(g.LastSession is { } l ? $"{Hms(l.Duration)}，共 {l.Requests} 条管线：游戏自带库 {l.FromGameLibrary}、缓存命中 {l.CacheHits}、游玩时编译 {l.Compiles}（最长 {l.WorstCompileMs:0.0} 毫秒）{(l.StartupCompiles > 0 ? $"，启动或加载时编译 {l.StartupCompiles}" : "")}{(l.RayQueryRecompiles > 0 ? $"，每次启动仍需部分重编的光追管线 {l.RayQueryRecompiles}" : "")}{(l.StateObjectsReady + l.StateObjectsCompiled + l.StateObjectsStartupCompiled > 0 ? $"；光追状态对象：已就绪 {l.StateObjectsReady}、游玩时编译 {l.StateObjectsCompiled}{(l.StateObjectsStartupCompiled > 0 ? $"、启动或加载时编译 {l.StateObjectsStartupCompiled}" : "")}" : "")}" : "-")}
           首次启动  {(rec.FirstLaunch is { } fl ? $"{fl.At.LocalDateTime:yyyy-MM-dd HH:mm}；上次编译后缓存命中 {fl.Hits}，仍编译 {fl.Compiles}（已覆盖 {fl.Compiled * 100:0.0}%）" : "-")}
@@ -328,7 +339,7 @@ async Task<int> Compile()
     var targets = args[1] == "--all-ready"
         ? k.Games.Where(s => s.Status is GameStatus.Ready or GameStatus.Stale && s.NoStutter == null && !s.CompileUnreached).ToList()
         : [Match(k.Games, args[1])];
-    if (targets is [{ ReasonFlags: var flags } refused] && flags.HasFlag(GameReasonFlags.CacheUnreachable)) return Fail($"{refused.Game.Name}: {refused.StatusReason}");
+    if (targets is [{ ReasonFlags: var flags } refused] && flags.HasFlag(GameReasonFlags.CacheUnreachable)) return Fail($"{refused.Game.Name}：{Format.Reason(refused)}");
     if (args.Contains("--careful") || args.Contains("--fast"))
         foreach (var g in targets)
         {
@@ -453,7 +464,7 @@ async Task<int> Key()
     var g = Match(k.Games, args[1]);
     if (!k.SetEncryptionKey(g.Game.Id, args[2])) return Fail($"此密钥无法打开 {g.Game.Name} 的文件");
     await k.RescanAsync(CancellationToken.None);
-    Console.WriteLine($"已接受 {g.Game.Name} 的密钥：{k.Games.First(s => s.Game.Id == g.Game.Id).StatusReason}");
+    Console.WriteLine($"已接受 {g.Game.Name} 的密钥：{Format.Reason(k.Games.First(s => s.Game.Id == g.Game.Id))}");
     return 0;
 }
 

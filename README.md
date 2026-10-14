@@ -8,6 +8,7 @@
 
 - 源码开发分支：[codex/zh-cn-no-ac-gate](https://github.com/SAOG0721/SCSKiller-NoACGate-zh-CN/tree/codex/zh-cn-no-ac-gate)。
 - **尚无可供下载安装的 fork 版本。**独立签名和安装包验证完成前，自动更新保持关闭。
+- 本 fork 默认不连接上游在线规则或社区数据库；Patreon 登录、社区下载、匿名分享和活跃检查由用户分别选择。
 - 本 fork 的 GitHub Issues 目前未开放。请不要通过原项目的 Issue 入口反馈本 fork 的问题。
 
 原项目的使用说明与历史下载链接保存在 [上游 README 存档](README.upstream.md)；其中的下载、网站、Patreon、Issue 和测试结论属于原项目。原项目版权、[GPL-3.0-or-later 许可证](LICENSE)、[附加许可](LICENSE-EXCEPTION.txt)与[第三方声明](THIRD-PARTY-NOTICES.md)均予保留。

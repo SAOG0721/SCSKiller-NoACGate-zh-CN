@@ -14,12 +14,12 @@ namespace SCSKiller.Core.App;
 /// "alpha", "prio", "internal"; the UI ignores others) and <c>until</c>, when they end, grace included (null: no end date).</summary>
 public sealed record AccountStatus(IReadOnlyList<string> Ent, DateTimeOffset? Until)
 {
-    static readonly Dictionary<string, string> Names = new() { ["db"] = "community shader hash database", ["beta"] = "beta builds", ["alpha"] = "alpha builds", ["prio"] = "priority requests" };
+    static readonly Dictionary<string, string> Names = new() { ["db"] = "上游社区着色器哈希数据库", ["beta"] = "测试版", ["alpha"] = "预览版", ["prio"] = "优先处理请求" };
 
     /// <summary>The Account card's line, e.g. "Supporter: beta builds and alpha builds."; null when no flag is shown.</summary>
     public string? Benefits => Ent.Where(Names.ContainsKey).Select(k => Names[k]).ToList() is { Count: > 0 } names
-        ? "Supporter: " + (names.Count > 1 ? string.Join(", ", names[..^1]) + " and " + names[^1] : names[0])
-            + (Until is { } until ? $", until {until.ToLocalTime():d MMM yyyy}." : ".")
+        ? "Patreon 会员权益：" + string.Join("、", names)
+            + (Until is { } until ? $"；有效期至 {until.ToLocalTime():yyyy-MM-dd}。" : "。")
         : null;
 }
 
@@ -32,8 +32,8 @@ public sealed class AccountException(string message) : Exception(message);
 public sealed class Account
 {
     public static readonly TimeSpan SignInTimeout = TimeSpan.FromMinutes(5);
-    const string Unreachable = "Can't reach the SCSKiller server right now. Check your internet connection, or try again later.";
-    const string NotRevoked = "Signed out on this PC. The server couldn't remove it from your account's devices; it drops off there after 90 days unused.";
+    const string Unreachable = "目前无法连接上游 SCSKiller 服务。请检查网络连接或稍后重试。";
+    const string NotRevoked = "已在本机退出登录，但上游服务未能从账号设备列表中移除此设备；连续 90 天不用后会自动移除。";
 
     readonly string file;
     readonly RouteFailover routes;
@@ -95,7 +95,7 @@ public sealed class Account
             var code = await loopback.WaitAsync(state, any.Token);
             using var r = await SendAsync(HttpMethod.Post, "v1/auth/exchange", null, any.Token, new { code, verifier, label = DeviceLabel() });
             if (r.StatusCode == HttpStatusCode.BadRequest)   // invalid_grant: the one-time code expired (60 s) or was used
-                throw new AccountException("The sign-in expired or was already used. Please try again.");
+                throw new AccountException("登录请求已过期或已使用，请重试。");
             var json = await AnswerAsync(r, any.Token);
             Save(json.GetProperty("device_token").GetString()!);
             SetAccess(r, json);
@@ -104,8 +104,7 @@ public sealed class Account
         }
         catch (OperationCanceledException) when (timeout.IsCancellationRequested && !mine.IsCancellationRequested)
         {
-            Problem = $"Sign-in timed out after {SignInTimeout.TotalMinutes:0} minutes. If the Patreon page didn't load, Patreon may be " +
-                      "unreachable from your network right now; if a football match is on, try again afterwards.";
+            Problem = $"登录在 {SignInTimeout.TotalMinutes:0} 分钟后超时。若 Patreon 页面未打开，请检查网络连接并稍后重试。";
         }
         catch (OperationCanceledException) when (mine.IsCancellationRequested) { }
         catch (Exception e) { Problem = Plain(e); }
@@ -192,7 +191,7 @@ public sealed class Account
         if (r.StatusCode == HttpStatusCode.Unauthorized)   // revoked: removed from the account, 6th device, or 90 days unused (§2.4, §2.5)
         {
             Forget();
-            throw new AccountException("This PC was signed out of your Patreon account (removed from its devices, or unused for 90 days). Sign in again.");
+            throw new AccountException("此设备已从 Patreon 账号中退出（可能被移出设备列表或连续 90 天未使用），请重新登录。");
         }
         SetAccess(r, await AnswerAsync(r, ct));
     }
@@ -219,9 +218,9 @@ public sealed class Account
     {
         if (!r.IsSuccessStatusCode) throw new AccountException(r.StatusCode switch
         {
-            HttpStatusCode.TooManyRequests => "Too many attempts from your network. Wait a while and try again.",
-            >= HttpStatusCode.InternalServerError => $"The SCSKiller server had a problem (error {(int)r.StatusCode}). Try again in a few minutes.",
-            _ => $"The SCSKiller server refused the request (error {(int)r.StatusCode}). If it keeps happening, sign out and in again.",
+            HttpStatusCode.TooManyRequests => "当前网络请求过于频繁，请稍后重试。",
+            >= HttpStatusCode.InternalServerError => $"上游 SCSKiller 服务发生错误（{(int)r.StatusCode}），请稍后重试。",
+            _ => $"上游 SCSKiller 服务拒绝了请求（{(int)r.StatusCode}）。若持续发生，请退出后重新登录。",
         });
         return await r.Content.ReadFromJsonAsync<JsonElement>(ct);
     }
@@ -230,10 +229,10 @@ public sealed class Account
     {
         AccountException => e.Message,
         HttpRequestException => Unreachable,
-        OperationCanceledException => "The SCSKiller server didn't answer in time. Try again later.",
+        OperationCanceledException => "上游 SCSKiller 服务响应超时，请稍后重试。",
         JsonException or KeyNotFoundException or InvalidOperationException or FormatException =>
-            "The SCSKiller server gave an answer this version doesn't understand. An update of SCSKiller may fix it.",
-        Win32Exception => "Couldn't open your web browser: " + e.Message,
+            "上游 SCSKiller 服务返回了本版本无法解析的数据；可能需要更新客户端。",
+        Win32Exception => "无法打开浏览器：" + e.Message,
         _ => e.Message,
     };
 
@@ -290,19 +289,19 @@ public sealed class LoopbackCallback : IDisposable
         while (true)
         {
             var c = await listener.GetContextAsync().WaitAsync(ct);
-            if (c.Request.Url?.AbsolutePath != "/cb") { Reply(c, 404, "Not found."); continue; }
+            if (c.Request.Url?.AbsolutePath != "/cb") { Reply(c, 404, "未找到页面。"); continue; }
             var q = c.Request.QueryString;
             if (q["state"] != state)
             {
-                Reply(c, 400, "This page doesn't belong to the sign-in SCSKiller is waiting for. Start again from SCSKiller.");
-                throw new AccountException("The browser's answer didn't match this sign-in, so it was refused. Please try again.");
+                Reply(c, 400, "此页面与 SCSKiller 正在等待的登录请求不匹配。请从 SCSKiller 重新开始。");
+                throw new AccountException("浏览器响应与当前登录请求不匹配，已拒绝该响应。请重试。");
             }
             if (q["error"] != null || q["code"] is not { Length: > 0 } code)
             {
-                Reply(c, 400, "Sign-in didn't complete. You can close this tab and try again from SCSKiller.");
-                throw new AccountException(q["error"] == "access_denied" ? "Sign-in was cancelled on Patreon." : $"Sign-in didn't complete ({q["error"] ?? "no code"}). Please try again.");
+                Reply(c, 400, "登录未完成。可以关闭此标签页并从 SCSKiller 重试。");
+                throw new AccountException(q["error"] == "access_denied" ? "已在 Patreon 取消登录。" : $"登录未完成（{q["error"] ?? "无授权码"}），请重试。");
             }
-            Reply(c, 200, "You're signed in. You can close this tab and go back to SCSKiller.");
+            Reply(c, 200, "登录成功。可以关闭此标签页并返回 SCSKiller。");
             return code;
         }
     }

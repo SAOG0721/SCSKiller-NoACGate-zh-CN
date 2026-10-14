@@ -227,7 +227,7 @@ public class AccountTests : IDisposable
         Assert.Equal(HttpStatusCode.NotFound, (await Browse($"http://127.0.0.1:{cb.Port}/favicon.ico")).StatusCode);
         var page = await Browse($"http://127.0.0.1:{cb.Port}/cb?code=one-time&state=s1");
         Assert.Equal(HttpStatusCode.OK, page.StatusCode);
-        Assert.Contains("close this tab", await page.Content.ReadAsStringAsync());
+        Assert.Contains("关闭此标签页", await page.Content.ReadAsStringAsync());
         Assert.Equal("one-time", await wait);
     }
 
@@ -304,11 +304,11 @@ public class AccountTests : IDisposable
         var account = new Account(_dir, Routes(new Fake(_ => throw Down)), _ => Assert.Fail("browser opened"), _clock);
         Assert.False(await account.SignInAsync());
         Assert.False(account.SignedIn);
-        Assert.Contains("Can't reach the SCSKiller server", account.Problem);
+        Assert.Contains("无法连接上游 SCSKiller 服务", account.Problem);
 
         account = new Account(_dir, Routes(new Fake(_ => Ours(HttpStatusCode.ServiceUnavailable))), _ => Assert.Fail("browser opened"), _clock);
         Assert.False(await account.SignInAsync());
-        Assert.Contains("error 503", account.Problem);
+        Assert.Contains("503", account.Problem);
     }
 
     [Theory]
@@ -429,7 +429,7 @@ public class AccountTests : IDisposable
         var account = new Account(_dir, Routes(new Fake(_ => Ours(HttpStatusCode.Unauthorized, new { error = "invalid_token" }))), clock: _clock);
         await account.RefreshAsync();
         Assert.False(account.SignedIn);
-        Assert.Contains("Sign in again", account.Problem);
+        Assert.Contains("请重新登录", account.Problem);
         Assert.False(File.Exists(Path.Combine(_dir, "auth.dat")));
     }
 
@@ -457,7 +457,7 @@ public class AccountTests : IDisposable
         var account = new Account(_dir, Routes(new Fake(_ => throw Down)), clock: _clock);
         await account.SignOutAsync();
         Assert.False(account.SignedIn);
-        Assert.Contains("Signed out on this PC", account.Problem);
+        Assert.Contains("已在本机退出登录", account.Problem);
         Assert.False(File.Exists(Path.Combine(_dir, "auth.dat")));
         Assert.False(new Account(_dir, Routes(new Fake(_ => throw Down))).SignedIn);
     }
@@ -465,9 +465,9 @@ public class AccountTests : IDisposable
     [Fact]
     public void Benefits_NameTheShownFlags_InTokenOrder()
     {
-        Assert.Equal("Supporter: community shader hash database, beta builds, alpha builds and priority requests.",
+        Assert.Equal("Patreon 会员权益：上游社区着色器哈希数据库、测试版、预览版、优先处理请求。",
             new AccountStatus(["db", "beta", "alpha", "prio", "internal", "future"], null).Benefits);
-        Assert.Equal("Supporter: community shader hash database and beta builds.", new AccountStatus(["db", "beta"], null).Benefits);
+        Assert.Equal("Patreon 会员权益：上游社区着色器哈希数据库、测试版。", new AccountStatus(["db", "beta"], null).Benefits);
         Assert.Null(new AccountStatus(["internal"], null).Benefits);
     }
 }
