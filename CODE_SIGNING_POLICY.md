@@ -1,5 +1,7 @@
 # Code signing policy
 
+> **SCSKiller-NoACGate-zh-CN fork 提示：**以下是上游项目的原有签名政策，不代表本 fork 已获得上游的签名资质、密钥或审核。本 fork 尚未发布安装包；发布前必须制定并验证独立的签名与更新信任链。
+
 ## Status
 
 SCSKiller has applied for free code signing from the [SignPath Foundation](https://signpath.org). Until it's granted,

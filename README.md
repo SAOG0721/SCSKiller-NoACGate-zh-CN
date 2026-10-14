@@ -1,4 +1,4 @@
-> **简体中文 fork 开发中：**[中文说明](README.zh-CN.md) · [开发 TODO](TODO.md)。本 fork 的 GitHub 仓库是 [SAOG0721/SCSKiller-NoACGate-zh-CN](https://github.com/SAOG0721/SCSKiller-NoACGate-zh-CN)。以下保留上游 README，里面的下载、网站、Patreon 和测试结果均属于原项目；本 fork 尚未发布可用版本。
+> **简体中文 fork 开发中：**[中文说明](README.zh-CN.md) · [开发 TODO](TODO.md)。本 fork 的 GitHub 仓库是 [SAOG0721/SCSKiller-NoACGate-zh-CN](https://github.com/SAOG0721/SCSKiller-NoACGate-zh-CN)。以下保留上游 README，里面的下载、网站、Patreon、提交 Issue 入口和测试结果均属于原项目；请勿通过这些链接反馈本 fork 的问题。本 fork 尚未开放 Issues，也未发布可用版本。
 
 <p align="center">
   <img width="128" src=".github/assets/logo.png" alt="SCSKiller logo">
