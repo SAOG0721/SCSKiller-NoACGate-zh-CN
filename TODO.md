@@ -7,7 +7,7 @@
 - [x] 将 GitHub fork 改名为 `SAOG0721/SCSKiller-NoACGate-zh-CN`。
 - [x] 本地 `origin` 指向 fork，`upstream` 指向原项目，保留 Git 历史；在 `codex/zh-cn-no-ac-gate` 分支开发。
 - [x] 本 TODO 已提交到本地 Git（`ae68229`）；后续实现仍在分支上。
-- [ ] 提交后续实现，推送分支并确认远端与工作区状态。
+- [x] 首轮实现已提交为 `448c52c` 并推送到 fork 的 `codex/zh-cn-no-ac-gate` 分支；后续任务继续在此分支进行。
 
 ## 1. 录制器：警告后由用户选择
 
@@ -51,4 +51,4 @@
 - 门禁：`src/SCSKiller.App/ViewModels.cs` 的录制开关和提示；`src/SCSKiller.Core/App/ScsKiller.cs` 的 `RecorderSkip`、`Install`、`AntiCheatFound`、`CheckRecorderGames`；`proxy/proxy.cpp` 的 `admitted`。
 - 持久化：`src/SCSKiller.Core/App/AppStore.cs` 的 `GameRecord`；界面状态：`src/SCSKiller.Core/Contracts.cs` 的 `GameState`。
 - 汉化：`src/SCSKiller.App/Pages/*.xaml`、`ViewModels.cs`、`src/SCSKiller.Cli/`；当前大量文案硬编码。
-- 共存与更新：`AppStore.cs` 的数据根目录、`src/SCSKiller.App/Program.cs` 的实例标识、`src/SCSKiller.Core/App/Updates.cs` 的上游更新地址。
+- 共存与更新：`AppStore.cs` 的数据根目录、`src/SCSKiller.App/Program.cs` 的实例标识、`src/SCSKiller.Core/App/Updates.cs` 的 fork 更新地址。
