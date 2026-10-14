@@ -193,25 +193,22 @@ public static class AutoInstall
 /// strands every installed build's stable updates.</summary>
 public static class UpdateFeeds
 {
-    public const string GhRepo = "BlueHeisenberg/SCSKiller";
-    public static readonly Uri Packages = new("https://dl.scskiller.io/");   // alpha/beta/internal packages: VPS route only
+    public const string GhRepo = "SAOG0721/SCSKiller-NoACGate-zh-CN";
+    public static readonly Uri Packages = new($"https://github.com/{GhRepo}/releases/");
     /// <summary>The app's background check; the Library's refresh and About's "Check for updates" check in between.</summary>
     public static readonly TimeSpan CheckEvery = TimeSpan.FromHours(1);
 
     /// <summary>Stable: the feed on GitHub Releases (§4.4). Other channels: the edge, behind the access token, through
     /// <see cref="RouteFailover"/> (a URL on its primary route).</summary>
-    public static Uri Feed(string channel, string file) => channel == UpdateChannels.Stable
-        ? new($"https://github.com/{GhRepo}/releases/latest/download/{file}")
-        : new(RouteFailover.Default.Primary, EdgePath(channel, file));
+    public static Uri Feed(string channel, string file) => new($"https://github.com/{GhRepo}/releases/latest/download/{file}");
 
     /// <summary>A file of an alpha, beta or internal channel on the edge, relative to a route.</summary>
     public static string EdgePath(string channel, string file) => $"v1/updates/{channel}/{file}";
 
     /// <summary>A package named by a signed feed: the version's own channel says where it lives (a beta feed also lists
     /// stable releases, §4.1). Its SHA-256 comes from the signed feed, so the host doesn't have to be trusted.</summary>
-    public static Uri Package(AppVersion v, string fileName) => v.Channel == UpdateChannels.Stable
-        ? new($"https://github.com/{GhRepo}/releases/download/v{v}/{Uri.EscapeDataString(fileName)}")
-        : new(PackageHost, $"v1/updates/{v.Channel}/{Uri.EscapeDataString(fileName)}");
+    public static Uri Package(AppVersion v, string fileName) =>
+        new($"https://github.com/{GhRepo}/releases/download/v{v}/{Uri.EscapeDataString(fileName)}");
 
     /// <summary>A package body into <paramref name="to"/>: at most the signed feed's <paramref name="size"/> (its SHA-256 is
     /// only checked once the download ends), and refused when no byte arrives for <paramref name="stall"/>.</summary>
@@ -231,15 +228,12 @@ public static class UpdateFeeds
         }
     }
 
-    // SCSKILLER_API (a local backend) serves the packages too
-    static Uri PackageHost => Environment.GetEnvironmentVariable("SCSKILLER_API") is { Length: > 0 } ? RouteFailover.Default.Primary : Packages;
-
     /// <summary>The About page's "Download source code" (§4.5 item 7): the public repo's tag for stable; for alpha and beta
     /// the source zip next to the package on the edge (with the access token); none for internal and dev builds.</summary>
     public static Uri? Source(AppVersion v) => v.Channel switch
     {
         UpdateChannels.Stable => new($"https://github.com/{GhRepo}/tree/v{v}"),
-        UpdateChannels.Alpha or UpdateChannels.Beta => new(RouteFailover.Default.Primary, $"v1/updates/{v.Channel}/source-{v}.zip"),
+        UpdateChannels.Alpha or UpdateChannels.Beta => new($"https://github.com/{GhRepo}/tree/v{v}"),
         _ => null,
     };
 }
@@ -294,7 +288,7 @@ public sealed class FeedClient(HttpMessageHandler handler, FeedTrust trust, Func
         if (retryAt.TryGetValue(url.Host, out var at) && Environment.TickCount64 < at)
             throw new HttpRequestException($"{url.Host} asked to wait", null, HttpStatusCode.TooManyRequests);
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
-        if (channel != UpdateChannels.Stable)
+        if (channel != UpdateChannels.Stable && url.Host != "github.com")
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", await token() ?? throw new InvalidOperationException($"sign in for the {channel} channel"));
         var r = await http.SendAsync(request, completion, ct);
         if (r.IsSuccessStatusCode) return r;
@@ -414,7 +408,7 @@ public static class HookSteps
 /// hands over to Update.exe (<see cref="MarkApplying"/>): a marker file, since a mutex dies with the app before the swap.</summary>
 public static class Busy
 {
-    public const string Name = @"Local\SCSKiller.Busy";
+    public const string Name = @"Local\SCSKiller-NoACGate-zh-CN.Busy";
     public static readonly TimeSpan ApplyingFor = TimeSpan.FromMinutes(2);   // an older marker is a crashed apply
 
     /// <summary>Held until disposed. The named object exists while any process has it open, so ownership (and its thread

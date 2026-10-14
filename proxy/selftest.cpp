@@ -2193,7 +2193,7 @@ static int nvext_child(int proc, unsigned seed, const std::wstring& dir, const s
     FILE* f = _wfopen(out.c_str(), L"w");
     CHECK(f);
     if (proc == 4) {  // the warm replays the recording on this device, nothing else
-        auto start = (void(WINAPI*)(IUnknown*))GetProcAddress(m, "SCSKiller_StartWarm");
+        auto start = (void(WINAPI*)(IUnknown*))GetProcAddress(m, "SCSKillerNoACGate_StartWarm");
         auto stats = (void(WINAPI*)(uint64_t*))GetProcAddress(m, "SCSKiller_Stats");
         CHECK(start && stats);
         uint64_t st[7];
@@ -3527,14 +3527,14 @@ static int unload_rows(const std::wstring& dir) {
     return SUCCEEDED(hr) ? 0 : 1;
 }
 
-// The app's attestation for this exe, as ScsKiller.WriteAttestation writes it: scskiller.armed here (its nonce kept when it
+// The app's attestation for this exe, as ScsKiller.WriteAttestation writes it: scskiller-noac.armed here (its nonce kept when it
 // has one, so copies of this exe running from the same folder share it) and the ledger entry
 // <ledger_dir>\<the first of ledger_keys>, removed when this process exits.
 static std::wstring g_ledger;
 static void arm_self(const std::wstring& dir, const std::wstring& exe) {
     WIN32_FILE_ATTRIBUTE_DATA self;
     if (!GetFileAttributesExW(exe.c_str(), GetFileExInfoStandard, &self)) return;
-    const std::wstring armed = dir + L"scskiller.armed";
+    const std::wstring armed = dir + L"scskiller-noac.armed";
     wchar_t nonce[64] = {};
     if (GetPrivateProfileStringW(L"scskiller", L"nonce", L"", nonce, 64, armed.c_str()) != 32) {
         std::random_device rd;
@@ -3551,6 +3551,9 @@ static void arm_self(const std::wstring& dir, const std::wstring& exe) {
     CreateDirectoryW(ledger.substr(0, ledger.find_last_of(L'\\')).c_str(), nullptr), CreateDirectoryW(ledger.c_str(), nullptr);
     g_ledger = ledger + L"\\" + key;
     WritePrivateProfileStringW(L"scskiller", L"nonce", nonce, g_ledger.c_str());
+    wchar_t allow[8];
+    bool allowed = GetPrivateProfileStringW(L"scskiller", L"allow_ac", L"", allow, 8, armed.c_str()) == 1 && !wcscmp(allow, L"1");
+    WritePrivateProfileStringW(L"scskiller", L"allow_ac", allowed ? L"1" : nullptr, g_ledger.c_str());
     atexit([] { DeleteFileW(g_ledger.c_str()); });
 }
 

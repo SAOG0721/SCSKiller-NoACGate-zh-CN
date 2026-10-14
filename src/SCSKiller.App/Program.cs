@@ -11,7 +11,7 @@ namespace SCSKiller.App;
 /// (--fake, --screenshots) never register nor redirect: they must not reach a real running instance.</summary>
 public static class Program
 {
-    public const string InstanceKey = "SCSKiller";
+    public const string InstanceKey = "SCSKiller-NoACGate-zh-CN";
 
     [STAThread]
     static int Main(string[] args)

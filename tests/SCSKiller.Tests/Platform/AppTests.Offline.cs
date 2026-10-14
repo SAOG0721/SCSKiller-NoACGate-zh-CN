@@ -309,7 +309,7 @@ public partial class AppTests
     {
         var before = Names(_exeDir);
         var store = Journal(["d3d12.dll"]);
-        File.WriteAllBytes(Path.Combine(_exeDir, "d3d12.dll"), [.. "MZ older proxy SCSKiller_StartWarm "u8]);
+        File.WriteAllBytes(Path.Combine(_exeDir, "d3d12.dll"), [.. "MZ older proxy SCSKillerNoACGate_StartWarm "u8]);
         Assert.Null(ScsKiller.CleanOfflineSession(store, _game.Id, _ => false, _ => { }));
         Assert.Equal(before, Names(_exeDir));
     }

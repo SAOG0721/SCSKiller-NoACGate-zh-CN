@@ -20,7 +20,7 @@ EXPORTS
     D3D12SerializeVersionedRootSignature = stub_D3D12SerializeVersionedRootSignature @116
     GetBehaviorValue = stub_GetBehaviorValue         @117
     SCSKiller_Stats                                  @200
-    SCSKiller_StartWarm                              @201
+    SCSKillerNoACGate_StartWarm                              @201
     SCSKiller_WarmOptions                            @202
     SCSKiller_Progress                               @203
     SCSKiller_Control                                @204

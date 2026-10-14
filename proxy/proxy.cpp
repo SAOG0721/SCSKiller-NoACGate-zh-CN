@@ -188,17 +188,17 @@ void logf(const char* fmt, ...) {  // also used by warm11.cpp
 // Admission, decided once at the first device (any path: D3D12CreateDevice, a device factory; D3D12GetInterface's hooks
 // only forward until then). The recorder records for the whole run only when all hold, else it is a pure pass-through
 // (no device hooked, nothing written):
-//  - scskiller.armed has [scskiller] armed=1 and this process's exe as it was then: the app wrote it after a clean full
+//  - scskiller-noac.armed has [scskiller] armed=1 and this process's exe as it was then: the app wrote it after a clean full
 //    anti-cheat check of the install and deletes it on any change there (GameFiles.DetectAntiCheat walks the install;
 //    this dll doesn't);
-//  - no anti-cheat marker in this folder: the built-in list, plus scskiller.ini markers= (it only adds; malformed: no);
+//  - without allow_ac=1 in both attestations (a per-game UI opt-in), no anti-cheat marker in this folder:
+//    the built-in list, plus scskiller.ini markers= (it only adds; malformed: no);
 //    an attestation bound to this process (pid= and pid_time=, below) drops EasyAntiCheat's names from that list;
-//  - no "Riot Games" folder in the exe's path;
-//  - no anti-cheat client module loaded.
+//    no "Riot Games" folder in the exe's path, and no anti-cheat client module loaded.
 // pid= and pid_time= (its creation FILETIME, UTC) bind the attestation to the one process the app started suspended
 // itself, without EasyAntiCheat, for an offline session: in both files, equal, and this process's. Any other launch
 // with the same files there (Steam's start_protected_game.exe, then EasyAntiCheat, then the game) is a pass-through.
-// scskiller.armed is read again after the rest: changed or gone (the app disarmed it meanwhile) is a pass-through.
+// scskiller-noac.armed is read again after the rest: changed or gone (the app disarmed it meanwhile) is a pass-through.
 // Accepted limits: a client that loads later in an admitted run isn't caught here (the app removes the recorder and the
 // next launch isn't armed); the app arms after its check and its install watcher's events arrive milliseconds after the
 // change, so a launch inside that window may be admitted (the exe fingerprint covers updates); an anti-cheat added while
@@ -275,7 +275,7 @@ static bool anti_cheat_beside(const std::vector<std::wstring>& markers) {
     FindClose(h);
     return found || !listed;
 }
-// scskiller.armed as it is now (at most 4 KB; "" when missing or unreadable).
+// scskiller-noac.armed as it is now (at most 4 KB; "" when missing or unreadable).
 static std::string small_file(const std::wstring& path) {
     HANDLE h = path.empty() ? INVALID_HANDLE_VALUE : CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, 0, nullptr);
     if (h == INVALID_HANDLE_VALUE) return "";
@@ -287,7 +287,7 @@ static std::string small_file(const std::wstring& path) {
     return s;
 }
 // The app's ledger entry for this process's exe: <ledger_dir>\<the first of ledger_keys>. The app writes it with the nonce
-// it puts in scskiller.armed and deletes it first when it disarms: its own folder, which nothing in the game holds open.
+// it puts in scskiller-noac.armed and deletes it first when it disarms: its own folder, which nothing in the game holds open.
 // "" when the folder or the exe path can't be had.
 static std::wstring ledger_path() {
     std::wstring exe(32768, L'\0');
@@ -297,17 +297,17 @@ static std::wstring ledger_path() {
     const std::wstring key = ledger_keys(exe).front(), dir = ledger_dir();
     return key.empty() || dir.empty() ? L"" : dir + L"\\" + key;
 }
-// Both attestations as they are now: scskiller.armed and the ledger entry.
+// Both attestations as they are now: scskiller-noac.armed and the ledger entry.
 static std::string armed_text() {
     const std::wstring ledger = ledger_path();
-    return small_file(g_dir + L"scskiller.armed") + '\0' + small_file(ledger) + (GetFileAttributesW((ledger + L".revoked").c_str()) != INVALID_FILE_ATTRIBUTES ? "|revoked" : "");
+    return small_file(g_dir + L"scskiller-noac.armed") + '\0' + small_file(ledger) + (GetFileAttributesW((ledger + L".revoked").c_str()) != INVALID_FILE_ATTRIBUTES ? "|revoked" : "");
 }
 // armed=1, checked= present, and the install the app checked is the one running: exe_size= and exe_time= (FILETIME, UTC)
 // are this process's exe as it was then (the app closed while the game updated has no watcher to disarm; an update that
 // adds anti-cheat ships a changed exe). bound: pid= and pid_time= name this process.
-static bool armed(bool& bound) {
-    bound = false;
-    const std::wstring file = g_dir + L"scskiller.armed";
+static bool armed(bool& bound, bool& allow_ac) {
+    bound = allow_ac = false;
+    const std::wstring file = g_dir + L"scskiller-noac.armed";
     wchar_t v[32];
     GetPrivateProfileStringW(L"scskiller", L"armed", L"", v, 32, file.c_str());
     if (wcscmp(v, L"1")) return false;
@@ -328,13 +328,18 @@ static bool armed(bool& bound) {
         return false;
     if (size != ((uint64_t)a.nFileSizeHigh << 32 | a.nFileSizeLow) || time != ((uint64_t)a.ftLastWriteTime.dwHighDateTime << 32 | a.ftLastWriteTime.dwLowDateTime))
         return false;
-    // the same nonce in the app's ledger: a scskiller.armed the app couldn't revoke (held open) has none there
+    // the same nonce in the app's ledger: a scskiller-noac.armed the app couldn't revoke (held open) has none there
     const std::wstring ledger = ledger_path();
     if (GetFileAttributesW((ledger + L".revoked").c_str()) != INVALID_FILE_ATTRIBUTES) return false;  // the app's mark beside an entry it couldn't revoke
     wchar_t nonce[64], kept[64];
     DWORD a1 = GetPrivateProfileStringW(L"scskiller", L"nonce", L"", nonce, 64, file.c_str());
     DWORD a2 = ledger.empty() ? 0 : GetPrivateProfileStringW(L"scskiller", L"nonce", L"", kept, 64, ledger.c_str());
     if (a1 != 32 || a2 != 32 || wcscmp(nonce, kept)) return false;
+    wchar_t permission[8], saved[8];
+    DWORD p1 = GetPrivateProfileStringW(L"scskiller", L"allow_ac", L"", permission, 8, file.c_str());
+    DWORD p2 = GetPrivateProfileStringW(L"scskiller", L"allow_ac", L"", saved, 8, ledger.c_str());
+    if (p1 != p2 || wcscmp(permission, saved) || (p1 && wcscmp(permission, L"1"))) return false;
+    allow_ac = p1 == 1;
     // the process binding: the same in both files (none in both: unbound), and this process
     for (auto key : {L"pid", L"pid_time"}) {
         wchar_t here[32], there[32];
@@ -374,11 +379,14 @@ static bool admitted() {
     std::call_once(once, [] {
         std::vector<std::wstring> markers;
         const std::string attested = armed_text();
-        bool bound;
-        const char* why = !armed(bound) ? "not armed" : !anti_cheat_markers(markers) ? "markers= malformed" : nullptr;
-        if (!why && bound) markers.erase(markers.begin(), markers.begin() + kEasyAntiCheatMarkers);  // the app started this process without EasyAntiCheat
-        if (!why && riot_games()) why = "Riot Games install";
-        if (!why) why = anti_cheat_beside(markers) ? "anti-cheat next to the exe" : anti_cheat_loaded() ? "anti-cheat client loaded" : nullptr;
+        bool bound, allow_ac;
+        const char* why = !armed(bound, allow_ac) ? "not armed" : nullptr;
+        if (!why && !allow_ac) {
+            if (!anti_cheat_markers(markers)) why = "markers= malformed";
+            if (!why && bound) markers.erase(markers.begin(), markers.begin() + kEasyAntiCheatMarkers);  // the app started this process without EasyAntiCheat
+            if (!why && riot_games()) why = "Riot Games install";
+            if (!why) why = anti_cheat_beside(markers) ? "anti-cheat next to the exe" : anti_cheat_loaded() ? "anti-cheat client loaded" : nullptr;
+        }
         // tests: a change in between. SCSKILLER_TEST_ADMIT_GATE=<name>: sets the event <name>.checked, waits for <name>.go.
         // Only in a process exporting SCSKiller_WarmHost (selftest), never a game.
         if (wchar_t gate[64]; !why && GetProcAddress(GetModuleHandleW(nullptr), "SCSKiller_WarmHost") && env(L"SCSKILLER_TEST_ADMIT_GATE", gate)) {
@@ -3115,12 +3123,12 @@ extern "C" HRESULT WINAPI Proxy_D3D12GetInterface(REFCLSID clsid, REFIID riid, v
 }
 
 // For scskiller_warm: start the replay on a device created through this dll (no PSO create needed to trigger it).
-extern "C" void WINAPI SCSKiller_StartWarm(IUnknown* unk) {
+extern "C" void WINAPI SCSKillerNoACGate_StartWarm(IUnknown* unk) {
     ID3D12Device* dev;
     if (SUCCEEDED(unk->QueryInterface(IID_PPV_ARGS(&dev)))) on_first_pso(dev), dev->Release();
 }
 
-// For scskiller_warm, before SCSKiller_StartWarm: threads (0 = default), idle priority, first item to replay.
+// For scskiller_warm, before SCSKillerNoACGate_StartWarm: threads (0 = default), idle priority, first item to replay.
 // Only scskiller_warm's staged child calls this, so it also marks the run as a warm-up, not a play session.
 extern "C" void WINAPI SCSKiller_WarmOptions(int threads, BOOL idle, uint64_t start) {
     g_staged = true;
@@ -3129,14 +3137,14 @@ extern "C" void WINAPI SCSKiller_WarmOptions(int threads, BOOL idle, uint64_t st
     g_start = start;
 }
 
-// For scskiller_warm, before SCSKiller_StartWarm (a retry): concurrent state object creates (0 = as many as the workers)
+// For scskiller_warm, before SCSKillerNoACGate_StartWarm (a retry): concurrent state object creates (0 = as many as the workers)
 // and the items an earlier run found faulting or hanging alone (counted failed, never replayed).
 extern "C" void WINAPI SCSKiller_WarmRt(int rt_threads, const uint64_t* skip, uint32_t nskip) {
     g_rt_threads = rt_threads;
     for (uint32_t i = 0; i < nskip; ++i) g_skip.insert((size_t)skip[i]);
 }
 
-// For scskiller_warm, before SCSKiller_StartWarm: the keys (20 bytes each) of items that removed the device in an earlier run,
+// For scskiller_warm, before SCSKillerNoACGate_StartWarm: the keys (20 bytes each) of items that removed the device in an earlier run,
 // never replayed, and the items to create alone before the workers start (in flight when an earlier process's device was removed).
 extern "C" void WINAPI SCSKiller_WarmCrash(const uint8_t* keys, uint32_t nkeys, const uint64_t* alone, uint32_t nalone) {
     for (uint32_t i = 0; i < nkeys; ++i) {
@@ -3155,10 +3163,10 @@ extern "C" BOOL WINAPI SCSKiller_Crashes(const char** keys, const char** alone) 
     return g_removed;
 }
 
-// For scskiller_warm, before SCSKiller_StartWarm: the process's private memory budget in MB (0 = none), see g_mem_mb.
+// For scskiller_warm, before SCSKillerNoACGate_StartWarm: the process's private memory budget in MB (0 = none), see g_mem_mb.
 extern "C" void WINAPI SCSKiller_WarmMemory(uint32_t mb) { g_mem_mb = mb; }
 
-// For scskiller_warm, before SCSKiller_StartWarm: each item's pass (n = the item count) and the one this process creates.
+// For scskiller_warm, before SCSKillerNoACGate_StartWarm: each item's pass (n = the item count) and the one this process creates.
 extern "C" void WINAPI SCSKiller_WarmPass(const uint8_t* pass_of, uint64_t n, uint32_t pass) {
     g_pass_of.assign(pass_of, pass_of + n);
     g_pass = (uint8_t)pass;
@@ -3230,7 +3238,7 @@ static bool same_file(const std::wstring& a, const std::wstring& b) {
     return !memcmp(&id[0], &id[1], sizeof id[0]);
 }
 // This dll's folder. The loader's path can be rewritten in user mode: REFramework points every dll in the exe's folder at a
-// copy under <folder>\_storage_ (where no scskiller.armed is). The kernel's name of the mapped image can't be, so the exe's
+// copy under <folder>\_storage_ (where no scskiller-noac.armed is). The kernel's name of the mapped image can't be, so the exe's
 // folder is taken when the image really is that folder's file, else the reported one.
 static std::wstring own_dir(HMODULE self) {
     std::wstring dir = module_dir(self), exe_dir = module_dir(nullptr);

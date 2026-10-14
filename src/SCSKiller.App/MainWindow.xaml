@@ -2,7 +2,7 @@
     x:Class="SCSKiller.App.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="SCSKiller">
+    Title="SCSKiller-NoACGate 中文版">
     <Window.SystemBackdrop>
         <MicaBackdrop />
     </Window.SystemBackdrop>
@@ -16,7 +16,7 @@
         <Border x:Name="ShotBackground" Grid.RowSpan="2" Visibility="Collapsed"
                 Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" />
 
-        <TitleBar x:Name="AppTitleBar" Title="SCSKiller" Subtitle="Shader Compilation Stutter Killer"
+        <TitleBar x:Name="AppTitleBar" Title="SCSKiller-NoACGate" Subtitle="着色器卡顿预编译 · 中文版"
                   IsBackButtonVisible="False"
                   IsPaneToggleButtonVisible="True" PaneToggleRequested="OnPaneToggle">
             <TitleBar.IconSource>
@@ -27,7 +27,7 @@
                 <Button x:Name="UpdateButton" Visibility="Collapsed" Click="OnRestartToUpdate" Margin="0,0,8,0" Padding="10,3">
                     <StackPanel Orientation="Horizontal" Spacing="6">
                         <FontIcon Glyph="&#xE777;" FontSize="13" />
-                        <TextBlock x:Name="UpdateText" Text="Restart to update" FontSize="13" />
+                        <TextBlock x:Name="UpdateText" Text="重启以更新" FontSize="13" />
                     </StackPanel>
                 </Button>
             </TitleBar.RightHeader>
@@ -38,18 +38,18 @@
                         IsBackButtonVisible="Collapsed" IsPaneToggleButtonVisible="False" IsSettingsVisible="False"
                         SelectionChanged="OnNavSelection" ItemInvoked="OnNavInvoked">
             <NavigationView.MenuItems>
-                <NavigationViewItem x:Name="LibraryItem" Content="Library">
+                <NavigationViewItem x:Name="LibraryItem" Content="游戏库">
                     <NavigationViewItem.Icon><FontIcon Glyph="&#xF0E2;" /></NavigationViewItem.Icon>
                 </NavigationViewItem>
-                <NavigationViewItem x:Name="QueueItem" Content="Compile queue">
+                <NavigationViewItem x:Name="QueueItem" Content="编译队列">
                     <NavigationViewItem.Icon><FontIcon Glyph="&#xE8FD;" /></NavigationViewItem.Icon>
                 </NavigationViewItem>
-                <NavigationViewItem x:Name="SettingsItem" Content="Settings">
+                <NavigationViewItem x:Name="SettingsItem" Content="设置">
                     <NavigationViewItem.Icon><FontIcon Glyph="&#xE713;" /></NavigationViewItem.Icon>
                 </NavigationViewItem>
             </NavigationView.MenuItems>
             <NavigationView.FooterMenuItems>
-                <NavigationViewItem x:Name="AboutItem" Content="About">
+                <NavigationViewItem x:Name="AboutItem" Content="关于">
                     <NavigationViewItem.Icon><FontIcon Glyph="&#xE946;" /></NavigationViewItem.Icon>
                 </NavigationViewItem>
             </NavigationView.FooterMenuItems>

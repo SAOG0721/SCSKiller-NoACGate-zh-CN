@@ -21,7 +21,7 @@ inline std::wstring ledger_dir() {
     if (FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &local))) return CoTaskMemFree(local), L"";
     std::wstring dir = local;
     CoTaskMemFree(local);
-    return dir + L"\\SCSKiller\\armed";
+    return dir + L"\\SCSKiller-NoACGate-zh-CN\\armed";
 }
 
 inline std::wstring ledger_hex(const void* p, size_t n) {

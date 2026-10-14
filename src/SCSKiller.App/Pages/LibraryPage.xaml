@@ -30,7 +30,7 @@
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition />
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="Library" Style="{StaticResource TitleTextBlockStyle}" TextLineBounds="TrimToBaseline" VerticalAlignment="Bottom" />
+                        <TextBlock Text="游戏库" Style="{StaticResource TitleTextBlockStyle}" TextLineBounds="TrimToBaseline" VerticalAlignment="Bottom" />
                         <TextBlock Grid.Column="1" Text="{x:Bind Vm.Summary, Mode=OneWay}" Style="{StaticResource Secondary}"
                                    TextLineBounds="TrimToBaseline" VerticalAlignment="Bottom" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
                     </Grid>
@@ -40,13 +40,13 @@
                     <Button ToolTipService.ToolTip="Re-reads every game's cache size, recordings and status, and finds new games. Shift+click also re-checks every game's engine and anti-cheat (slower)." Click="OnRefresh">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <ProgressRing Width="16" Height="16" IsActive="{x:Bind Vm.Refreshing, Mode=OneWay}" Visibility="{x:Bind Vm.Refreshing, Mode=OneWay}" />
-                            <TextBlock Text="Refresh" />
+                            <TextBlock Text="刷新" />
                         </StackPanel>
                     </Button>
-                    <Button AutomationProperties.Name="Add a game" ToolTipService.ToolTip="Add a game no store lists (another launcher, or a game in a folder of its own) by picking its .exe" Click="OnAddGame">
+                    <Button AutomationProperties.Name="添加游戏" ToolTipService.ToolTip="选择游戏的 .exe，添加平台未列出的游戏" Click="OnAddGame">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <FontIcon Glyph="&#xE710;" FontSize="14" />
-                            <TextBlock Text="Add a game…" />
+                            <TextBlock Text="添加游戏…" />
                         </StackPanel>
                     </Button>
                     <Button Content="{x:Bind Vm.AddAllText, Mode=OneWay}"
@@ -89,12 +89,12 @@
             </Grid.ColumnDefinitions>
             <Border Style="{StaticResource Card}">
                 <StackPanel Spacing="8">
-                    <TextBlock Text="Driver shader cache" Style="{StaticResource Secondary}" />
+                    <TextBlock Text="驱动着色器缓存" Style="{StaticResource Secondary}" />
                     <StackPanel Orientation="Horizontal" Spacing="6">
                         <TextBlock Text="{x:Bind Vm.CacheUsed, Mode=OneWay}" Style="{StaticResource Big}" />
                         <TextBlock Text="{x:Bind Vm.CacheLimitText, Mode=OneWay}" Style="{StaticResource Secondary}" VerticalAlignment="Bottom" Margin="0,0,0,3" />
                     </StackPanel>
-                    <ProgressBar Value="{x:Bind Vm.CachePercent, Mode=OneWay}" AutomationProperties.Name="Driver shader cache use" />
+                    <ProgressBar Value="{x:Bind Vm.CachePercent, Mode=OneWay}" AutomationProperties.Name="驱动着色器缓存占用" />
                     <Grid ColumnSpacing="6" Visibility="{x:Bind Vm.CacheWarn, Mode=OneWay}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
@@ -105,27 +105,27 @@
                         <TextBlock Grid.Column="1" Text="{x:Bind Vm.CacheWarnText, Mode=OneWay}" Style="{StaticResource CaptionTextBlockStyle}"
                                    Foreground="{ThemeResource WarnBrush}" TextWrapping="Wrap" VerticalAlignment="Center" />
                     </Grid>
-                    <HyperlinkButton Content="Change" Padding="0" FontSize="12" Click="OnSettings" Visibility="{x:Bind Vm.CanRaiseLimit, Mode=OneWay}"
-                                     AutomationProperties.Name="Change the driver shader cache size" />
+                    <HyperlinkButton Content="更改" Padding="0" FontSize="12" Click="OnSettings" Visibility="{x:Bind Vm.CanRaiseLimit, Mode=OneWay}"
+                                     AutomationProperties.Name="更改驱动着色器缓存上限" />
                 </StackPanel>
             </Border>
             <Border Grid.Column="1" Style="{StaticResource Card}">
                 <StackPanel Spacing="8">
-                    <TextBlock Text="After a driver update" Style="{StaticResource Secondary}" />
+                    <TextBlock Text="驱动更新后" Style="{StaticResource Secondary}" />
                     <TextBlock Text="{x:Bind Vm.DriverMode, Mode=OneWay}" Style="{StaticResource Big}" />
                     <TextBlock Text="{x:Bind Vm.DriverModeNote, Mode=OneWay}" Style="{StaticResource Caption}" />
-                    <HyperlinkButton Content="Change" Padding="0" FontSize="12" Click="OnSettings" AutomationProperties.Name="Change what happens after a driver update" />
+                    <HyperlinkButton Content="更改" Padding="0" FontSize="12" Click="OnSettings" AutomationProperties.Name="更改驱动更新后的操作" />
                 </StackPanel>
             </Border>
             <Border Grid.Column="2" Style="{StaticResource Card}">
                 <StackPanel Spacing="8">
-                    <TextBlock Text="Compile speed" Style="{StaticResource Secondary}" />
+                    <TextBlock Text="编译速度" Style="{StaticResource Secondary}" />
                     <StackPanel Orientation="Horizontal" Spacing="6">
                         <TextBlock Text="{x:Bind Vm.Threads, Mode=OneWay}" Style="{StaticResource Big}" />
                         <TextBlock Text="{x:Bind Vm.ThreadsOf, Mode=OneWay}" Style="{StaticResource Secondary}" VerticalAlignment="Bottom" Margin="0,0,0,3" />
                     </StackPanel>
                     <TextBlock Text="{x:Bind Vm.SpeedNote, Mode=OneWay}" Style="{StaticResource Caption}" />
-                    <HyperlinkButton Content="Change" Padding="0" FontSize="12" Click="OnSettings" AutomationProperties.Name="Change compile speed" />
+                    <HyperlinkButton Content="更改" Padding="0" FontSize="12" Click="OnSettings" AutomationProperties.Name="更改编译速度" />
                 </StackPanel>
             </Border>
         </Grid>
@@ -146,7 +146,7 @@
                     </Grid.ColumnDefinitions>
                     <ProgressRing Width="16" Height="16" IsActive="{x:Bind Vm.ScanBusy, Mode=OneWay}" VerticalAlignment="Center" />
                     <TextBlock Grid.Column="1" TextWrapping="Wrap" VerticalAlignment="Center">
-                        <Run Text="Checking for new and changed games…" FontWeight="SemiBold" /><Run Text="  " /><Run Text="{x:Bind Vm.ScanBusyNote, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <Run Text="正在检查新增或更新的游戏…" FontWeight="SemiBold" /><Run Text="  " /><Run Text="{x:Bind Vm.ScanBusyNote, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                     </TextBlock>
                 </Grid>
                 <!-- Search: filters as you type (name, store or engine); Esc or the clear button resets it. -->
@@ -155,8 +155,8 @@
                         <ColumnDefinition Width="320" />
                         <ColumnDefinition />
                     </Grid.ColumnDefinitions>
-                    <AutoSuggestBox x:Name="Search" PlaceholderText="Search by name, store or engine" QueryIcon="Find"
-                                    TextChanged="OnSearch" KeyDown="OnSearchKey" AutomationProperties.Name="Search games" />
+                    <AutoSuggestBox x:Name="Search" PlaceholderText="按游戏名、平台或引擎搜索" QueryIcon="Find"
+                                    TextChanged="OnSearch" KeyDown="OnSearchKey" AutomationProperties.Name="搜索游戏" />
                     <TextBlock Grid.Column="1" Text="{x:Bind Vm.ShownText, Mode=OneWay}" Visibility="{x:Bind Vm.Filtering, Mode=OneWay}"
                                Style="{StaticResource Caption}" VerticalAlignment="Center" />
                 </Grid>
@@ -170,12 +170,12 @@
                         <ColumnDefinition Width="56" />
                         <ColumnDefinition Width="4.1*" MinWidth="355" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="Game" Style="{StaticResource Caption}" />
-                    <TextBlock Grid.Column="1" Text="Shaders" Style="{StaticResource Caption}" TextAlignment="Right" />
-                    <TextBlock Grid.Column="2" Text="Pipelines" Style="{StaticResource Caption}" TextAlignment="Right" />
-                    <TextBlock Grid.Column="3" Text="Cache" Style="{StaticResource Caption}" TextAlignment="Right" />
-                    <TextBlock Grid.Column="4" Text="Time" Style="{StaticResource Caption}" TextAlignment="Right" />
-                    <TextBlock Grid.Column="5" Text="Status" Style="{StaticResource Caption}" Margin="12,0,0,0" />
+                    <TextBlock Text="游戏" Style="{StaticResource Caption}" />
+                    <TextBlock Grid.Column="1" Text="着色器" Style="{StaticResource Caption}" TextAlignment="Right" />
+                    <TextBlock Grid.Column="2" Text="管线" Style="{StaticResource Caption}" TextAlignment="Right" />
+                    <TextBlock Grid.Column="3" Text="缓存" Style="{StaticResource Caption}" TextAlignment="Right" />
+                    <TextBlock Grid.Column="4" Text="耗时" Style="{StaticResource Caption}" TextAlignment="Right" />
+                    <TextBlock Grid.Column="5" Text="状态" Style="{StaticResource Caption}" Margin="12,0,0,0" />
                 </Grid>
                 <Rectangle Grid.Row="2" Height="1" VerticalAlignment="Bottom" Fill="{ThemeResource CardStrokeColorDefaultBrush}" />
 
@@ -183,7 +183,7 @@
                             Spacing="8" MaxWidth="460" Padding="24">
                     <FontIcon Glyph="&#xE721;" FontSize="28" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                     <TextBlock Text="{x:Bind Vm.NoMatchText, Mode=OneWay}" Style="{StaticResource Section}" HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" />
-                    <TextBlock Text="Try part of the name, a store (Steam, GOG…) or an engine (UE 5)." Style="{StaticResource Secondary}"
+                    <TextBlock Text="试试游戏名的一部分、平台（Steam、GOG 等）或引擎（UE 5）。" Style="{StaticResource Secondary}"
                                TextWrapping="Wrap" TextAlignment="Center" />
                 </StackPanel>
 
@@ -191,12 +191,12 @@
                 <StackPanel Grid.Row="3" Visibility="{x:Bind Vm.ScanEmpty, Mode=OneWay}" HorizontalAlignment="Center" VerticalAlignment="Center"
                             Spacing="12" MaxWidth="460" Padding="24">
                     <ProgressRing Width="32" Height="32" IsActive="{x:Bind Vm.ScanEmpty, Mode=OneWay}" />
-                    <TextBlock Text="Looking for your games…" Style="{StaticResource Section}" HorizontalAlignment="Center" />
+                    <TextBlock Text="正在查找游戏…" Style="{StaticResource Section}" HorizontalAlignment="Center" />
                     <TextBlock Text="{x:Bind Vm.ScanEmptyNote}" Style="{StaticResource Secondary}" TextWrapping="Wrap" TextAlignment="Center" />
                 </StackPanel>
 
                 <ListView x:Name="List" Grid.Row="3" ItemsSource="{Binding Source={StaticResource GroupedGames}}" SelectionMode="None" IsItemClickEnabled="True"
-                          ItemClick="OnGameClick" AutomationProperties.Name="Games" Padding="0,4">
+                          ItemClick="OnGameClick" AutomationProperties.Name="游戏" Padding="0,4">
                     <!-- no add/remove animation: a row is replaced on every re-evaluation, and the fade made rows vanish and come back -->
                     <ListView.ItemContainerTransitions>
                         <TransitionCollection />
@@ -255,11 +255,11 @@
                                         <StackPanel Orientation="Horizontal" Spacing="4" Visibility="{x:Bind HasTagLine}" Margin="0,2,0,0">
                                         <Border Style="{StaticResource Chip}" Height="18" Padding="6,0" CornerRadius="9" Visibility="{x:Bind IsKnownStutter}"
                                                 ToolTipService.ToolTip="{x:Bind StutterTip}">
-                                            <TextBlock Text="Known to stutter" FontSize="11" Foreground="{ThemeResource WarnBrush}" VerticalAlignment="Center" />
+                                            <TextBlock Text="已知有卡顿" FontSize="11" Foreground="{ThemeResource WarnBrush}" VerticalAlignment="Center" />
                                         </Border>
                                         <Border Style="{StaticResource Chip}" Height="18" Padding="6,0" CornerRadius="9" Visibility="{x:Bind IsNoStutter}"
                                                 ToolTipService.ToolTip="{x:Bind NoStutterTip}">
-                                            <TextBlock Text="No shader stutter" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+                                            <TextBlock Text="无着色器卡顿" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
                                         </Border>
                                         <ItemsControl ItemsSource="{x:Bind Tags}" IsTabStop="False" Visibility="{x:Bind HasTags}">
                                             <ItemsControl.ItemsPanel>
@@ -302,9 +302,9 @@
                                         </Grid>
                                         <Grid>
                                             <Button Content="{x:Bind AddText}" Visibility="{x:Bind IsAdd}" IsEnabled="{x:Bind CanAdd}" Click="OnAdd" />
-                                            <Button Content="Details" Visibility="{x:Bind IsDetails}" Click="OnDetails" />
-                                            <Button Content="Record" Style="{StaticResource WarnButton}" Visibility="{x:Bind IsRecord}" IsEnabled="{x:Bind CanRecord}" Click="OnRecord" />
-                                            <Button Content="Why?" Visibility="{x:Bind IsWhy}" Click="OnWhy" />
+                                            <Button Content="详情" Visibility="{x:Bind IsDetails}" Click="OnDetails" />
+                                            <Button Content="录制" Style="{StaticResource WarnButton}" Visibility="{x:Bind IsRecord}" IsEnabled="{x:Bind CanRecord}" Click="OnRecord" />
+                                            <Button Content="原因" Visibility="{x:Bind IsWhy}" Click="OnWhy" />
                                         </Grid>
                                     </StackPanel>
                                 </Grid>

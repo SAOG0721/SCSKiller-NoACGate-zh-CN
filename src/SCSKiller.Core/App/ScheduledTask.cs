@@ -8,7 +8,7 @@ namespace SCSKiller.Core.App;
 /// <c>scskiller rewarm-stale --if-driver-changed</c> as the current user (no elevation).</summary>
 public static class ScheduledTask
 {
-    public const string Name = @"SCSKiller\RewarmStale";
+    public const string Name = @"SCSKiller-NoACGate-zh-CN\RewarmStale";
 
     public static string Xml(string cliExe, string user)
     {

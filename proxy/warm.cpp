@@ -210,7 +210,7 @@ static int child(DWORD parent_pid, const Opts& o) {
     auto proc = [m](const char* n) { return m ? (void*)GetProcAddress(m, n) : nullptr; };
     auto create_device = (decltype(&D3D12CreateDevice))proc("D3D12CreateDevice");
     auto options = (void(WINAPI*)(int, BOOL, uint64_t))proc("SCSKiller_WarmOptions");
-    auto start = (void(WINAPI*)(IUnknown*))proc("SCSKiller_StartWarm");
+    auto start = (void(WINAPI*)(IUnknown*))proc("SCSKillerNoACGate_StartWarm");
     auto progress = (void(WINAPI*)(uint64_t*))proc("SCSKiller_Progress");
     auto control = (void(WINAPI*)(int))proc("SCSKiller_Control");
     auto warm_rt = (void(WINAPI*)(int, const uint64_t*, uint32_t))proc("SCSKiller_WarmRt");

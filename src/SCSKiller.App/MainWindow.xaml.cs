@@ -243,6 +243,7 @@ public sealed partial class MainWindow : Window
             Root.RequestedTheme = theme;
             foreach (var (name, page, arg) in new (string, Type, object?)[]
                      { ("library", typeof(LibraryPage), null), ("detail", typeof(DetailPage), ff7),
+                        ("detail-anticheat", typeof(DetailPage), "steam:1245620"),
                        ("detail-new", typeof(DetailPage), "steam:1139900"),   // never compiled: estimated cache, Clear cache disabled
                        ("detail-stutter", typeof(DetailPage), "steam:990080"),   // known to stutter, with a source link
                        ("detail-partial", typeof(DetailPage), "steam:990080"), // Hogwarts Legacy: a partial plan, the recording hint

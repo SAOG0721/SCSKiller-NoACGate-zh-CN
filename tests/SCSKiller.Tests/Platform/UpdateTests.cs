@@ -372,19 +372,18 @@ public class UpdateTests : IDisposable
     public void SourceCode_AndPackageUrls()
     {
         Assert.Equal($"https://github.com/{UpdateFeeds.GhRepo}/tree/v1.4.2", UpdateFeeds.Source(AppVersion.Parse("1.4.2")!)!.AbsoluteUri);
-        Assert.Equal(new Uri(RouteFailover.Default.Primary, "v1/updates/beta/source-1.5.0-beta.2.zip"), UpdateFeeds.Source(AppVersion.Parse("1.5.0-beta.2+abc")!));
-        Assert.Equal(new Uri(RouteFailover.Default.Primary, "v1/updates/alpha/source-1.5.0-alpha.1.zip"), UpdateFeeds.Source(AppVersion.Parse("1.5.0-alpha.1")!));
+        Assert.Equal($"https://github.com/{UpdateFeeds.GhRepo}/tree/v1.5.0-beta.2", UpdateFeeds.Source(AppVersion.Parse("1.5.0-beta.2+abc")!)!.AbsoluteUri);
+        Assert.Equal($"https://github.com/{UpdateFeeds.GhRepo}/tree/v1.5.0-alpha.1", UpdateFeeds.Source(AppVersion.Parse("1.5.0-alpha.1")!)!.AbsoluteUri);
         Assert.Null(UpdateFeeds.Source(AppVersion.Parse("1.5.0-internal.1")!));
         Assert.Null(UpdateFeeds.Source(AppVersion.Parse("0.0.0-internal.0+abc")!));
 
         Assert.Equal($"https://github.com/{UpdateFeeds.GhRepo}/releases/latest/download/releases.stable.json", UpdateFeeds.Feed("stable", "releases.stable.json").AbsoluteUri);
-        Assert.Equal(new Uri(RouteFailover.Default.Primary, "v1/updates/beta/releases.beta.json.sig"), UpdateFeeds.Feed("beta", "releases.beta.json.sig"));
-        // a beta feed lists stable releases too: each package is fetched from its own version's channel
+        Assert.Equal($"https://github.com/{UpdateFeeds.GhRepo}/releases/latest/download/releases.beta.json.sig", UpdateFeeds.Feed("beta", "releases.beta.json.sig").AbsoluteUri);
+        // All channels stay on this fork's release host; no official binary is installed over it.
         Assert.Equal($"https://github.com/{UpdateFeeds.GhRepo}/releases/download/v1.4.2/SCSKiller.App-1.4.2-full.nupkg",
             UpdateFeeds.Package(AppVersion.Parse("1.4.2")!, "SCSKiller.App-1.4.2-full.nupkg").AbsoluteUri);
-        if (Environment.GetEnvironmentVariable("SCSKILLER_API") is not { Length: > 0 })
-            Assert.Equal("https://dl.scskiller.io/v1/updates/beta/SCSKiller.App-1.5.0-beta.2-delta.nupkg",
-                UpdateFeeds.Package(AppVersion.Parse("1.5.0-beta.2")!, "SCSKiller.App-1.5.0-beta.2-delta.nupkg").AbsoluteUri);
+        Assert.Equal($"https://github.com/{UpdateFeeds.GhRepo}/releases/download/v1.5.0-beta.2/SCSKiller.App-1.5.0-beta.2-delta.nupkg",
+            UpdateFeeds.Package(AppVersion.Parse("1.5.0-beta.2")!, "SCSKiller.App-1.5.0-beta.2-delta.nupkg").AbsoluteUri);
     }
 
     [Fact]
@@ -460,6 +459,7 @@ public class UpdateTests : IDisposable
             var url = request.RequestUri!;
             lock (Asked) Asked.Add(url);
             if (url.Host != "github.com") Assert.Equal("tok", request.Headers.Authorization?.Parameter);
+            else Assert.Null(request.Headers.Authorization);
             if (limited.Contains(url.Host))
             {
                 var r = new HttpResponseMessage(System.Net.HttpStatusCode.TooManyRequests);
@@ -479,29 +479,22 @@ public class UpdateTests : IDisposable
 
     FeedClient Client(Servers s, List<string>? log = null) => new(s, Trust(), () => Task.FromResult<string?>("tok"), l => log?.Add(l));
 
-    /// <summary>GitHub limiting the stable feed holds back neither the internal feed nor the internal package: the newer
-    /// internal build is still read and downloaded, and GitHub isn't asked again before its Retry-After.</summary>
+    /// <summary>All fork feeds and packages share GitHub: a rate limit holds back each channel until Retry-After.</summary>
     [Fact]
-    public async Task A_rate_limited_stable_feed_doesnt_hold_back_a_newer_internal_package()
+    public async Task A_rate_limited_fork_feed_holds_back_other_channels_and_packages()
     {
-        var files = Signed("internal", InternalFeed);
-        files[InternalPackage] = [1, 2, 3, 4];
-        var s = new Servers(files, "github.com");
+        var s = new Servers(Signed("internal", InternalFeed), "github.com");
         var log = new List<string>();
         var c = Client(s, log);
         for (var i = 0; i < 2; i++)
-        {
-            var (feeds, partial) = await c.ReadAsync("internal");
-            Assert.Equal(["internal"], feeds.Select(f => f.Channel));
-            Assert.Equal(InternalFeed, feeds[0].Feed.Feed);
-            Assert.True(partial);   // stable left out: a staged download it lists isn't dropped
-        }
+            Assert.Equal(System.Net.HttpStatusCode.TooManyRequests,
+                (await Assert.ThrowsAsync<HttpRequestException>(() => c.ReadAsync("internal"))).StatusCode);
+        Assert.Equal(System.Net.HttpStatusCode.TooManyRequests,
+            (await Assert.ThrowsAsync<HttpRequestException>(() => c.ReadAsync("stable"))).StatusCode);
+        Assert.Equal(System.Net.HttpStatusCode.TooManyRequests,
+            (await Assert.ThrowsAsync<HttpRequestException>(() => c.PackageAsync(AppVersion.Parse("1.2.3-internal.5")!, InternalPackage, default))).StatusCode);
         Assert.Equal(1, s.To("github.com"));
-        const string channel = "internal";
-        Assert.Equal(4, s.Asked.Count(u => u.AbsolutePath.EndsWith($"releases.{channel}.json") || u.AbsolutePath.EndsWith($"releases.{channel}.json.sig")));
         Assert.Contains(log, l => l.Contains("github.com"));
-        using var package = await c.PackageAsync(AppVersion.Parse("1.2.3-internal.5")!, InternalPackage, default);
-        Assert.Equal([1, 2, 3, 4], await package.Content.ReadAsByteArrayAsync());
     }
 
     [Fact]
@@ -517,25 +510,26 @@ public class UpdateTests : IDisposable
     }
 
     [Fact]
-    public async Task A_limited_package_host_doesnt_stop_the_feeds()
+    public async Task Fork_package_host_is_the_fork_release_page()
     {
-        if (Environment.GetEnvironmentVariable("SCSKILLER_API") is { Length: > 0 }) return;   // packages then share the API host
-        var s = new Servers(Signed("internal", InternalFeed), "dl.scskiller.io");
+        var files = Signed("internal", InternalFeed);
+        files[InternalPackage] = [1, 2, 3, 4];
+        var s = new Servers(files);
         var c = Client(s);
-        for (var i = 0; i < 2; i++)
+        using var package = await c.PackageAsync(AppVersion.Parse("1.2.3-internal.5")!, InternalPackage, default);
+        Assert.Equal([1, 2, 3, 4], await package.Content.ReadAsByteArrayAsync());
+        Assert.All(s.Asked, u =>
         {
-            var e = await Assert.ThrowsAsync<HttpRequestException>(() => c.PackageAsync(AppVersion.Parse("1.2.3-internal.5")!, InternalPackage, default));
-            Assert.Equal(System.Net.HttpStatusCode.TooManyRequests, e.StatusCode);
-        }
-        Assert.Equal(1, s.To("dl.scskiller.io"));
-        Assert.Single((await c.ReadAsync("internal")).Feeds);
+            Assert.Equal("github.com", u.Host);
+            Assert.Contains($"/{UpdateFeeds.GhRepo}/releases/", u.AbsolutePath);
+        });
     }
 
     [Fact]
-    public async Task The_signature_is_still_required_beside_a_rate_limited_feed()
+    public async Task The_signature_is_still_required_on_the_fork_feed()
     {
         var other = FeedTrust.NewKey();
-        await Assert.ThrowsAsync<FeedRejectedException>(() => Client(new Servers(Signed("internal", InternalFeed, other.Seed), "github.com")).ReadAsync("internal"));
+        await Assert.ThrowsAsync<FeedRejectedException>(() => Client(new Servers(Signed("internal", InternalFeed, other.Seed))).ReadAsync("internal"));
         // a later channel's feed that fails its signature fails the read too
         var files = Signed("internal", InternalFeed);
         foreach (var (k, v) in Signed("stable", StableFeed, other.Seed)) files[k] = v;

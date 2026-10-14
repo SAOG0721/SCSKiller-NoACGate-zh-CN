@@ -68,6 +68,7 @@ public sealed class GameRecord
     public string? RecorderMoveTo { get; set; }              // ...and the game's exe it moves next to: the uninstall hook's running check covers both
     // null = not migrated: the first reconcile makes an installed recorder of ours On (the user put it there), else Default
     public RecorderOverride? Recorder { get; set; }
+    public bool AntiCheatRecordingAllowed { get; set; }      // per-game opt-in after the UI warns; never implied by RecordAllGames
     public bool RecordAlongsideMod { get; set; }             // opt-in: install the recorder where a mod's d3d12.dll is, chained to it
     public ChainedDll? RecorderChained { get; set; }         // that mod's d3d12.dll, renamed for the chain: put back when the recorder goes
     public bool RecorderRollback { get; set; }               // a failed install couldn't take the proxy out: the next reconcile does
@@ -143,12 +144,12 @@ public sealed record Evaluation(string Key, EngineInfo? Engine, AntiCheat AntiCh
 /// <summary>%LOCALAPPDATA%\SCSKiller, or the portable build's data\: settings.json, scan.json, dismissed.json + games\&lt;id&gt;\state.json.</summary>
 public sealed class AppStore(string dataDir)
 {
-    /// <summary>%LOCALAPPDATA%\SCSKiller, or data\ beside the portable build's SCSKiller.exe. The recorder's ledger stays in
-    /// %LOCALAPPDATA%\SCSKiller\armed for both (<see cref="ScsKiller.LedgerDir"/>): the proxy reads it there.</summary>
+    /// <summary>%LOCALAPPDATA%\SCSKiller-NoACGate-zh-CN, or data\ beside the portable build's SCSKiller.exe.
+    /// The fork's recorder ledger has its own folder (<see cref="ScsKiller.LedgerDir"/>).</summary>
     public static string DefaultDir => _defaultDir.Value;
 
     static readonly Lazy<string> _defaultDir = new(() =>
-        Resolve(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SCSKiller"), PortableRoot(AppContext.BaseDirectory), out _onOldFolder));
+        Resolve(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SCSKiller-NoACGate-zh-CN"), PortableRoot(AppContext.BaseDirectory), out _onOldFolder));
 
     static IDisposable? _onOldFolder;   // held for the process's life (Resolve)
 

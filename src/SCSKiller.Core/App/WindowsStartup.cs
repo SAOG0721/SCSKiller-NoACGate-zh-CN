@@ -6,7 +6,7 @@ namespace SCSKiller.Core.App;
 /// the app hidden in the notification area at sign-in.</summary>
 public static class WindowsStartup
 {
-    public const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run", ValueName = "SCSKiller", TrayArg = "--tray";
+    public const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run", ValueName = "SCSKiller-NoACGate-zh-CN", TrayArg = "--tray";
 
     public static string Command(string appExe) => $"\"{appExe}\" {TrayArg}";
 

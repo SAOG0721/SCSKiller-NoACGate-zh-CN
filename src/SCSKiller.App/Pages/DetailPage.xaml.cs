@@ -40,7 +40,7 @@ public sealed partial class DetailPage : Page
     {
         Vm = new DetailVm((string)e.Parameter);
         Vm.ReadCaches();
-        Crumbs.ItemsSource = new[] { "Library", Vm.Name };
+        Crumbs.ItemsSource = new[] { "游戏库", Vm.Name };
         Vm.PropertyChanged += (_, _) => DrawFrames();
         Bindings.Update();
         DrawFrames();
@@ -230,6 +230,19 @@ public sealed partial class DetailPage : Page
         else SetRecord(on);
     }
 
+    async void OnAntiCheatRecordToggled(object _, RoutedEventArgs __)
+    {
+        var on = AntiCheatRecordSwitch.IsOn;
+        if (on == Vm.AntiCheatRecordOn) return;
+        if (on && !await App.ConfirmAsync(this, $"仍要为 {Vm.Name} 启用直接录制吗？",
+                new TextBlock { TextWrapping = TextWrapping.Wrap, Text = Vm.AntiCheatRecordNote }, "我理解风险，启用录制"))
+        {
+            Vm.Refresh();
+            return;
+        }
+        Set((vm, p) => vm.AntiCheatRecordPending = p, on, id => App.Core.SetAntiCheatRecording(id, on));
+    }
+
     void OnRecordTip(object _, RoutedEventArgs __) => SetRecord(true);
 
     void OnUseDefault(object _, RoutedEventArgs __) => SetRecord(null);
@@ -245,9 +258,9 @@ public sealed partial class DetailPage : Page
     async void OnRecordOffline(object _, RoutedEventArgs __)
     {
         var (vm, id) = (Vm, Vm.Row.Id);
-        if (!await App.ConfirmAsync(this, $"Start {vm.Name} offline without EasyAntiCheat?",
-                new TextBlock { TextWrapping = TextWrapping.Wrap, Text = DetailVm.OfflineRisk + " Online play isn't possible in that session." },
-                "Record offline session")) return;
+        if (!await App.ConfirmAsync(this, $"以不加载 EasyAntiCheat 的离线模式启动 {vm.Name}？",
+                new TextBlock { TextWrapping = TextWrapping.Wrap, Text = DetailVm.OfflineRisk + " 本次会话无法联网游玩。" },
+                "启动离线录制会话")) return;
         vm.OfflineStarting = true;
         vm.Refresh();
         Task session;

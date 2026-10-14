@@ -29,6 +29,15 @@ public partial class AppTests
     /// <summary>Armed as the proxy checks it: armed=1 beside the exe, and its nonce in the exe's ledger entry.</summary>
     static bool ArmedWithLedger(Game g) => ArmedState(g) == true;
 
+    [Fact]
+    public void Fork_does_not_claim_the_upstream_recorder_as_its_own()
+    {
+        var upstream = Path.Combine(_root, "upstream-d3d12.dll");
+        File.WriteAllBytes(upstream, "MZ SCSKiller_StartWarm "u8.ToArray());
+        Assert.False(ScsKiller.IsOurProxy(upstream));
+        Assert.True(ScsKiller.IsOurProxy(_proxy));
+    }
+
     /// <summary><see cref="ArmedWithLedger"/> from one read of both files, shared as the app reads them; null while the app
     /// arms the game again: the ledger already has the next nonce (it is written first), the file beside the exe not yet.</summary>
     static bool? ArmedState(Game g)
@@ -113,7 +122,7 @@ public partial class AppTests
     public async Task A_recorder_updated_at_startup_is_armed()
     {
         var dll = Path.Combine(_exeDir, "d3d12.dll");
-        File.WriteAllBytes(dll, [.. "MZ older proxy SCSKiller_StartWarm "u8]);   // an earlier build's, no armed file
+        File.WriteAllBytes(dll, [.. "MZ older proxy SCSKillerNoACGate_StartWarm "u8]);   // an earlier build's, no armed file
         var k = Managed();
         Recorded(k, _game);
         await k.ScanAsync(default);
@@ -208,6 +217,49 @@ public partial class AppTests
         Assert.False(File.Exists(Path.Combine(_exeDir, "d3d12.dll")));
         Assert.False(File.Exists(Path.Combine(_exeDir, ScsKiller.ArmedFile)));
         Assert.False(File.Exists(ScsKiller.LedgerFile(_game.ExePath)));
+    }
+
+    [Fact]
+    public async Task Anti_cheat_recorder_requires_explicit_choice_and_revokes_it_when_off()
+    {
+        Directory.CreateDirectory(Path.Combine(_game.InstallDir, "EasyAntiCheat"));
+        var k = Managed();
+        await k.ScanAsync(default);
+        k.SetRecorderOverride(_game.Id, RecorderOverride.On);   // a regular override isn't consent
+        Assert.False(File.Exists(Path.Combine(_exeDir, "d3d12.dll")));
+
+        k.SetAntiCheatRecording(_game.Id, true);
+        Assert.True(k.Store.LoadGame(_game.Id).AntiCheatRecordingAllowed);
+        Assert.True(ScsKiller.IsOurProxy(Path.Combine(_exeDir, "d3d12.dll")));
+        await AssertStaysArmed(k, _game);
+        Assert.Contains("allow_ac=1", File.ReadAllText(Path.Combine(_exeDir, ScsKiller.ArmedFile)));
+        Assert.Contains("allow_ac=1", File.ReadAllText(ScsKiller.LedgerFile(_game.ExePath)));
+        await k.CheckRecorderGames(true);
+        Assert.True(await ArmedOnceWritten(_game));
+
+        k.SetAntiCheatRecording(_game.Id, false);
+        Assert.False(k.Store.LoadGame(_game.Id).AntiCheatRecordingAllowed);
+        Assert.False(File.Exists(Path.Combine(_exeDir, "d3d12.dll")));
+        Assert.False(File.Exists(ScsKiller.LedgerFile(_game.ExePath)));
+    }
+
+    [Fact]
+    public async Task Turning_off_anti_cheat_recording_while_playing_disarms_before_file_removal()
+    {
+        Directory.CreateDirectory(Path.Combine(_game.InstallDir, "EasyAntiCheat"));
+        var k = Managed();
+        await k.ScanAsync(default);
+        k.SetAntiCheatRecording(_game.Id, true);
+        await AssertStaysArmed(k, _game);
+
+        k.ProcessNames = () => new HashSet<string> { Path.GetFileNameWithoutExtension(_game.ExePath) };
+        k.SetAntiCheatRecording(_game.Id, false);
+        Assert.False(File.Exists(ScsKiller.LedgerFile(_game.ExePath)));
+        Assert.True(File.Exists(Path.Combine(_exeDir, "d3d12.dll")));   // the running game may hold it open
+
+        k.ProcessNames = () => new HashSet<string>();
+        k.ReconcileRecorders(_game.Id);
+        Assert.False(File.Exists(Path.Combine(_exeDir, "d3d12.dll")));
     }
 
     /// <summary>Started on a PC without the ledger folder, the session runs and its cleanup leaves the folder as it was. A

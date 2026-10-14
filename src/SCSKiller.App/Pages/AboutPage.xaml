@@ -6,7 +6,7 @@
 
     <ScrollViewer>
         <StackPanel Padding="36,28,36,28" Spacing="16">
-            <TextBlock Text="About" Style="{StaticResource TitleTextBlockStyle}" />
+            <TextBlock Text="关于" Style="{StaticResource TitleTextBlockStyle}" />
 
             <Border Style="{StaticResource Card}" Padding="20">
                 <Grid ColumnSpacing="16">
@@ -16,54 +16,54 @@
                     </Grid.ColumnDefinitions>
                     <FontIcon Glyph="&#xE945;" FontSize="36" VerticalAlignment="Top" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
                     <StackPanel Grid.Column="1" Spacing="4">
-                        <TextBlock Text="SCSKiller" Style="{StaticResource Section}" FontSize="20" />
-                        <TextBlock Text="Shader Compilation Stutter Killer" Style="{StaticResource Secondary}" />
+                        <TextBlock Text="SCSKiller-NoACGate-zh-CN" Style="{StaticResource Section}" FontSize="20" />
+                        <TextBlock Text="着色器卡顿预编译 · 简体中文 fork" Style="{StaticResource Secondary}" />
                         <TextBlock Text="{x:Bind Vm.Version}" Style="{StaticResource Caption}" IsTextSelectionEnabled="True" />
                         <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,4,0,0" Visibility="{x:Bind Vm.ShowsCheck}">
-                            <Button Content="Check for updates" Click="OnCheckForUpdates" IsEnabled="{x:Bind Vm.CanCheck, Mode=OneWay}" />
+                            <Button Content="检查更新" Click="OnCheckForUpdates" IsEnabled="{x:Bind Vm.CanCheck, Mode=OneWay}" />
                             <TextBlock Text="{x:Bind Vm.UpdateNote, Mode=OneWay}" Style="{StaticResource Caption}" VerticalAlignment="Center" TextWrapping="Wrap" />
                         </StackPanel>
                         <CheckBox IsChecked="{x:Bind Vm.InstallUpdatesAutomatically, Mode=TwoWay}" Visibility="{x:Bind Vm.ShowsCheck}"
-                                  AutomationProperties.Name="Install updates automatically">
+                                  AutomationProperties.Name="自动安装更新">
                             <StackPanel Spacing="2">
-                                <TextBlock Text="Install updates automatically" TextWrapping="Wrap" />
-                                <TextBlock Text="A downloaded update installs the next time SCSKiller starts or quits, never during a compile, an offline session or a game. Off: only Restart to update installs it."
+                                <TextBlock Text="自动安装更新" TextWrapping="Wrap" />
+                                <TextBlock Text="已下载的更新会在下次启动或退出时安装；编译、离线会话和游戏运行期间不会安装。关闭后仅在选择重启更新时安装。"
                                            Style="{StaticResource Caption}" TextWrapping="Wrap" />
                             </StackPanel>
                         </CheckBox>
                         <InfoBar IsOpen="{x:Bind Vm.HasUpdateProblem, Mode=OneWay}" Visibility="{x:Bind Vm.HasUpdateProblem, Mode=OneWay}"
                                  Message="{x:Bind Vm.UpdateProblem, Mode=OneWay}" Severity="Warning" IsClosable="False" />
                         <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,4,0,0" Visibility="{x:Bind Vm.ShowsSource}">
-                            <Button Content="Download source code" Click="OnSource" IsEnabled="{x:Bind Vm.SourceIdle, Mode=OneWay}" />
+                            <Button Content="下载源代码" Click="OnSource" IsEnabled="{x:Bind Vm.SourceIdle, Mode=OneWay}" />
                             <TextBlock Text="{x:Bind Vm.SourceStatus, Mode=OneWay}" Style="{StaticResource Caption}" VerticalAlignment="Center" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
                         </StackPanel>
                         <TextBlock Margin="0,8,0,0" TextWrapping="Wrap"
-                                   Text="Compiles your games' shaders into the graphics driver's cache ahead of time, so they don't stutter the first time you play them." />
+                                   Text="提前把游戏着色器编译到显卡驱动缓存，减少首次游玩时的着色器编译卡顿。" />
                         <TextBlock Margin="0,8,0,0" Style="{StaticResource Secondary}">
-                            <Run Text="SCSKiller licence:" FontWeight="SemiBold" /><Run Text=" GPL-3.0-or-later, with an additional permission for Oodle, the Windows App SDK and graphics driver libraries (LICENSE-EXCEPTION.txt)" />
+                            <Run Text="许可证：" FontWeight="SemiBold" /><Run Text="GPL-3.0-or-later；Oodle、Windows App SDK 和显卡驱动库的附加许可见 LICENSE-EXCEPTION.txt。" />
                         </TextBlock>
                         <StackPanel Orientation="Horizontal" Spacing="16" Margin="0,4,0,0">
-                            <HyperlinkButton Content="Website" Padding="0" FontSize="12" NavigateUri="https://scskiller.com" />
-                            <HyperlinkButton Content="Source code" Padding="0" FontSize="12" NavigateUri="https://github.com/BlueHeisenberg/SCSKiller" />
-                            <HyperlinkButton Content="Support on Patreon" Padding="0" FontSize="12" NavigateUri="https://www.patreon.com/SCSKiller" />
+                            <HyperlinkButton Content="上游网站" Padding="0" FontSize="12" NavigateUri="https://scskiller.com" />
+                            <HyperlinkButton Content="本 fork 源码" Padding="0" FontSize="12" NavigateUri="https://github.com/SAOG0721/SCSKiller-NoACGate-zh-CN" />
+                            <HyperlinkButton Content="支持上游作者" Padding="0" FontSize="12" NavigateUri="https://www.patreon.com/SCSKiller" />
                         </StackPanel>
                     </StackPanel>
                 </Grid>
             </Border>
 
             <StackPanel Spacing="8">
-                <TextBlock Text="Use at your own risk" Style="{StaticResource Section}" />
-                <TextBlock Text="SCSKiller is provided as is, without warranty. It checks each game for anti-cheat before adding its recorder, but that check can miss one. You use it at your own risk, and its authors are not responsible for bans, crashes or lost data."
+                <TextBlock Text="使用风险" Style="{StaticResource Section}" />
+                <TextBlock Text="本 fork 按原样提供，不作兼容或账号安全保证。反作弊检测仍会显示，但你可以在阅读警告后逐游戏允许直接录制。游戏可能拒绝注入、崩溃或封禁账号；此选项不会关闭或绕过游戏反作弊。"
                            Style="{StaticResource Secondary}" TextWrapping="Wrap" />
             </StackPanel>
 
-            <Expander x:Name="TrademarksBox" Header="Trademarks" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+            <Expander x:Name="TrademarksBox" Header="商标" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                 <TextBlock Text="{x:Bind Vm.Trademarks}" Style="{StaticResource Secondary}" TextWrapping="Wrap" LineHeight="22" IsTextSelectionEnabled="True" />
             </Expander>
 
             <StackPanel Spacing="8">
-                <TextBlock Text="Third-party components" Style="{StaticResource Section}" />
-                <TextBlock Text="Open one to read its licence. The same list, with notes, is in THIRD-PARTY-NOTICES.md next to the app."
+                <TextBlock Text="第三方组件" Style="{StaticResource Section}" />
+                <TextBlock Text="展开条目可查看许可证；完整清单和备注见程序旁的 THIRD-PARTY-NOTICES.md。"
                            Style="{StaticResource Secondary}" TextWrapping="Wrap" />
                 <ItemsControl x:Name="Components" ItemsSource="{x:Bind Vm.Components}" IsTabStop="False">
                     <ItemsControl.ItemsPanel>

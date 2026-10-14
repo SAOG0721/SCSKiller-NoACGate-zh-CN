@@ -282,6 +282,17 @@ public sealed class FakeScsKiller : IScsKiller
     public void InstallRecorder(string gameId) => SetRecorderOverride(gameId, RecorderOverride.On);
     public void UninstallRecorder(string gameId) => SetRecorderOverride(gameId, RecorderOverride.Off);
     public void SetRecorderOverride(string gameId, RecorderOverride value) => SetRecorder(gameId, value);
+    public void SetAntiCheatRecording(string gameId, bool on)
+    {
+        GameState g;
+        lock (gate)
+        {
+            int i = games.FindIndex(x => x.Game.Id == gameId);
+            games[i] = g = games[i] with { AntiCheatRecordingAllowed = on, RecorderOverride = on ? RecorderOverride.On : RecorderOverride.Off,
+                RecorderSkip = on ? null : Core.App.ScsKiller.SkipAntiCheat, RecorderEffective = on, RecorderInstalled = on };
+        }
+        GameChanged?.Invoke(g);
+    }
     public void SetRecordAlongsideMod(string gameId, bool on)
     {
         GameState g;

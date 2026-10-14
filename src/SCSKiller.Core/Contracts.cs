@@ -279,7 +279,8 @@ public sealed record GameState(
     string? NoStutter = null,          // why it has no shader stutter (Games.GameVerdicts); null = not listed, or KnownStutter is
     bool CompileUnreached = false,     // NVIDIA: the warm's pipelines didn't serve the game (ScsKiller.IsUnreached): never queued but by hand
     bool NotPlanned = false,           // Unsupported by an "unsupported" verdict, or for a recording its anti-cheat blocks: not planned, unlike "unsupported-yet"
-    bool NewOnly = false);             // Stale only for pipelines its last warm didn't compile (ScsKiller.StaleReason past WarmChanged): the rest still serve
+    bool NewOnly = false,              // Stale only for pipelines its last warm didn't compile (ScsKiller.StaleReason past WarmChanged): the rest still serve
+    bool AntiCheatRecordingAllowed = false); // explicit per-game permission; anti-cheat detection remains visible
 
 /// <summary>A launch's frame times from the recorder (<see cref="App.FrameLog"/>): its length, the startup stretch before
 /// play (the game's own precompile and first load), the 1% low of play, every frame of 50 ms or more, and for a graph
@@ -427,6 +428,7 @@ public interface IScsKiller
     void RefreshCacheSizes();
     /// <summary>Never throws for the game's state: see <see cref="GameState.RecorderSkip"/>, <see cref="GameState.RecorderNote"/>.</summary>
     void SetRecorderOverride(string gameId, RecorderOverride value);
+    void SetAntiCheatRecording(string gameId, bool on);
     /// <summary>"Record alongside &lt;mod&gt;" (<see cref="GameState.RecorderMod"/>): the recorder may take a mod's d3d12.dll
     /// place, the mod renamed and put back byte for byte when the recorder goes. Never throws for the game's state.</summary>
     void SetRecordAlongsideMod(string gameId, bool on);

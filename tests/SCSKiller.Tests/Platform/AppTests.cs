@@ -35,7 +35,7 @@ public partial class AppTests : IDisposable
         _game = new Game("test:fake-" + Guid.NewGuid().ToString("N")[..8], "Fake Game", Store.Other, install, Core.Games.GameFiles.FindExe(install)!);
         _proxy = Path.Combine(_root, "tools", "d3d12.dll");
         Directory.CreateDirectory(Path.GetDirectoryName(_proxy)!);
-        File.WriteAllBytes(_proxy, [.. "MZ fake proxy SCSKiller_StartWarm "u8, .. Guid.NewGuid().ToByteArray()]);
+        File.WriteAllBytes(_proxy, [.. "MZ fake proxy SCSKillerNoACGate_StartWarm "u8, .. Guid.NewGuid().ToByteArray()]);
         ScsKiller.LedgerDir = Path.Combine(_root, "LocalAppData", "SCSKiller", "armed");   // this test's own, unless UseProxyLedger
     }
 
@@ -194,7 +194,7 @@ public partial class AppTests : IDisposable
         k.InstallRecorder(_game.Id);
         var dll = Path.Combine(_exeDir, "d3d12.dll");
         var installed = File.ReadAllBytes(dll);
-        File.WriteAllBytes(_proxy, [.. "MZ fake proxy SCSKiller_StartWarm "u8, .. Guid.NewGuid().ToByteArray()]);   // the app was updated
+        File.WriteAllBytes(_proxy, [.. "MZ fake proxy SCSKillerNoACGate_StartWarm "u8, .. Guid.NewGuid().ToByteArray()]);   // the app was updated
         Directory.CreateDirectory(dll + ".scskiller-new");
         var updated = Killer(new FakeReader(Unreal));
         updated.ProcessNames = () => new HashSet<string>();
@@ -1328,7 +1328,7 @@ public partial class AppTests : IDisposable
         k.ProcessNames = () => new HashSet<string>();
         await k.ScanAsync(default);
         k.InstallRecorder(_game.Id);
-        File.WriteAllBytes(dll, [.. "MZ older proxy SCSKiller_StartWarm "u8, .. Guid.NewGuid().ToByteArray()]);   // another build's: updated next
+        File.WriteAllBytes(dll, [.. "MZ older proxy SCSKillerNoACGate_StartWarm "u8, .. Guid.NewGuid().ToByteArray()]);   // another build's: updated next
         Directory.CreateDirectory(Path.Combine(_game.InstallDir, "Fake", "Content", "support", "EasyAntiCheat"));   // past the cached verdict and the name probe
         k.ReconcileRecorders(_game.Id);
         Assert.False(File.Exists(dll));
@@ -1726,7 +1726,7 @@ public partial class AppTests : IDisposable
         await k.ScanAsync(default);
         k.SetRecordAlongsideMod(_game.Id, true);   // installed alongside the mod
         Assert.NotNull(k.Store.LoadGame(_game.Id).RecorderChained);
-        File.WriteAllBytes(dll, [.. "MZ older proxy SCSKiller_StartWarm "u8, .. Guid.NewGuid().ToByteArray()]);   // another build's: updated next
+        File.WriteAllBytes(dll, [.. "MZ older proxy SCSKillerNoACGate_StartWarm "u8, .. Guid.NewGuid().ToByteArray()]);   // another build's: updated next
         k.InstallStep = step => { if (step == "copy") running.Add(Path.GetFileNameWithoutExtension(_game.ExePath)); };
         k.ReconcileRecorders(_game.Id);
         Assert.NotNull(k.Store.LoadGame(_game.Id).RecorderChained);   // the chain it found stays
@@ -5392,7 +5392,7 @@ public partial class AppTests : IDisposable
         k.InstallRecorder(g.Id);
         var old = File.ReadAllBytes(Dll(g));
 
-        File.WriteAllBytes(_proxy, [.. "MZ other build SCSKiller_StartWarm "u8, .. Guid.NewGuid().ToByteArray()]);
+        File.WriteAllBytes(_proxy, [.. "MZ other build SCSKillerNoACGate_StartWarm "u8, .. Guid.NewGuid().ToByteArray()]);
         k = RecordKiller([g], running: () => running);
         await k.ScanAsync(default);
         running.Add("Old");

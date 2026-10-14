@@ -60,6 +60,18 @@ public partial class AppTests
         Assert.Equal((GameStatus.Unsupported, "needs a recording, which EasyAntiCheat blocks", true), (s.Status, s.StatusReason, s.NotPlanned));   // "Not supported"
     }
 
+    [Fact]
+    public async Task Explicit_recording_choice_makes_an_anti_cheat_game_need_a_recording()
+    {
+        var k = AntiCheatGame();
+        var rec = k.Store.LoadGame(_game.Id);
+        rec.AntiCheatRecordingAllowed = true;
+        rec.Recorder = RecorderOverride.On;
+        k.Store.SaveGame(_game.Id, rec);
+        var s = (await k.ScanAsync(default)).Single();
+        Assert.Equal((GameStatus.NeedsRecording, false, null), (s.Status, s.NotPlanned, s.RecorderSkip));
+    }
+
     /// <summary>An EasyAntiCheat game an offline session can record (Games.OfflineEac), with no recording yet: "Needs an offline
     /// session", a NeedsRecording status with its own reason, the game page's action. With a recording it compiles as usual (below).</summary>
     [Fact]
@@ -130,6 +142,21 @@ public partial class AppTests
         var engine = Unreal with { Fork = "GAME_WutheringWaves", Unsupported = "needs a recording, which its anti-cheat blocks" };
         var s = (await Killer(new FakeReader(engine), new Planner()).ScanAsync(default)).Single();
         Assert.Equal((AntiCheat.Other, GameStatus.Unsupported, "needs a recording, which its anti-cheat blocks", true), (s.AntiCheat, s.Status, s.StatusReason, s.NotPlanned));
+    }
+
+    [Fact]
+    public async Task Recording_only_Unreal_fork_can_be_recorded_after_explicit_choice()
+    {
+        Directory.CreateDirectory(Path.Combine(_game.InstallDir, "AntiCheatExpert"));
+        var engine = Unreal with { Fork = "GAME_WutheringWaves", Unsupported = "needs a recording, which its anti-cheat blocks" };
+        var k = Killer(new FakeReader(engine), new Planner());
+        var rec = k.Store.LoadGame(_game.Id);
+        rec.AntiCheatRecordingAllowed = true;
+        rec.Recorder = RecorderOverride.On;
+        k.Store.SaveGame(_game.Id, rec);
+        var s = (await k.ScanAsync(default)).Single();
+        Assert.Equal((AntiCheat.Other, GameStatus.NeedsRecording, false), (s.AntiCheat, s.Status, s.NotPlanned));
+        Assert.Null(s.RecorderSkip);
     }
 
     /// <summary>A game added by hand and recorded, then listed by a store (a launcher SCSKiller finds since) that flags its

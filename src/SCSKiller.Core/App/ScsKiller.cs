@@ -51,7 +51,7 @@ public sealed partial class ScsKiller : IScsKiller
         return LargeCompileWarning(queue, vendor)
             ?? (planned > 0 && usage + planned > 0.9 * max ? $"After this queue the cache is close to its {App.Format.Bytes(max)} limit, older games may be evicted." : null);
     }
-    static readonly byte[] ProxyMarker = "SCSKiller_StartWarm"u8.ToArray();   // an export only our proxy d3d12.dll has
+    static readonly byte[] ProxyMarker = "SCSKillerNoACGate_StartWarm"u8.ToArray();   // an export only our proxy d3d12.dll has
     const string RecorderIni = "[scskiller]\r\n; written by SCSKiller: record the pipelines this game creates. Removed by 'uninstall recorder'.\r\nmode=record\r\n";
     static readonly TimeSpan Poll = TimeSpan.FromMilliseconds(500), AttributionInterval = TimeSpan.FromSeconds(3);
     // A new SCSKiller version may detect engines or plan differently: cached scan results from another one are redone.
@@ -799,6 +799,15 @@ public sealed partial class ScsKiller : IScsKiller
         TimeSpan? fast = psos is { } n ? TimeSpan.FromSeconds(n / (rec.PsoPerSecond ?? WarmRate)) : null;
         TimeSpan? careful = cap != null && psos is { } np && recorded is { } nr ? TimeSpan.FromSeconds(nr / DefaultCarefulPsoPerSecond + (np - nr) / (rec.PsoPerSecond ?? WarmRate)) : null;
         var (_, engine, antiCheat, check, _, streamlineFirst, _, _) = Evaluated(g, rec, force, out fresh);
+        // Unreal's recording-only forks can report "unsupported" solely because anti-cheat used to forbid the recorder.
+        // Keep the cached engine verdict unchanged; this game's explicit choice changes only its evaluated plan/readiness.
+        if (rec.AntiCheatRecordingAllowed && rec.Recorder == RecorderOverride.On && antiCheat != AntiCheat.None
+            && engine is { Family: "Unreal", Unsupported: not null } && RootSig.PlannedOnlyFromARecording(engine.Fork))
+        {
+            engine = engine with { Unsupported = null };
+            check = File.Exists(RecordingPath(g.Id)) || CommunityInUse(g.Id) != null
+                ? CheckRecordings(g, engine) : new PlanCheck(Readiness.NeedsRecording, "needs a recording");
+        }
         var slFirst = streamlineFirst && Vendor.Vendor == GpuVendor.Nvidia;
         driverStale = rec.WarmedAt != null && !CurrentDriver(gpuNow, rec.WarmedDriverId, rec.WarmedDriverVersion);
         var counted = rec.Pending;
@@ -828,9 +837,10 @@ public sealed partial class ScsKiller : IScsKiller
         bool ours;
         try { ours = IsOurProxy(dll); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { ours = rec.RecorderFiles.ContainsKey("d3d12.dll"); }   // held by the game
-        // the recorder is never installed next to anti-cheat, nor in a game the user added before they confirm its folder
+        // Anti-cheat recording requires this game's explicit opt-in; the global setting never grants it.
         var unconfirmed = Unconfirmed(g);
-        var noRecording = antiCheat != AntiCheat.None ? $"which {(antiCheat == AntiCheat.Other ? "its anti-cheat" : antiCheat)} blocks"
+        var allowAntiCheatRecording = rec.AntiCheatRecordingAllowed && rec.Recorder == RecorderOverride.On;
+        var noRecording = antiCheat != AntiCheat.None && !allowAntiCheatRecording ? $"which {(antiCheat == AntiCheat.Other ? "its anti-cheat" : antiCheat)} blocks"
               + (OfflineEac.Of(g, antiCheat, engine) != null ? " unless you record an offline session (game page)" : "")
             : unconfirmed ? ManualNoRecording : slFirst ? StreamlineNoRecording : null;
         var rejected = Rejected(rec.LastWarmFailed, rec.LastWarmCrashed);
@@ -844,7 +854,7 @@ public sealed partial class ScsKiller : IScsKiller
             Readiness.Unsupported => (GameStatus.Unsupported, check.Reason),
             _ when CantReach(g, rec, gpuNow) => (GameStatus.Unsupported, CantReachReason),
             // no plan source at all: the game files, this PC's recording and the community's were each checked
-            Readiness.NeedsRecording when OfflineEac.Of(g, antiCheat, engine) != null && !File.Exists(RecordingPath(g.Id)) && CommunityInUse(g.Id) == null
+            Readiness.NeedsRecording when !allowAntiCheatRecording && OfflineEac.Of(g, antiCheat, engine) != null && !File.Exists(RecordingPath(g.Id)) && CommunityInUse(g.Id) == null
                 => (GameStatus.NeedsRecording, OfflineSessionNote),   // a recording without draws keeps the arm below
             Readiness.NeedsRecording when noRecording != null => (GameStatus.Unsupported, $"needs a recording, {noRecording}" + DbNote(inDb)),
             Readiness.NeedsRecording => (GameStatus.NeedsRecording, check.Reason + DbNote(inDb)),
@@ -888,8 +898,9 @@ public sealed partial class ScsKiller : IScsKiller
 
     GameState WithRecorder(GameState s, GameRecord rec, bool ours, string exeDir)
     {
-        var skip = RecorderSkip(s, ModSkip(s.Game, exeDir, rec, ours)) ?? _recorderSkips.GetValueOrDefault(s.Game.Id);
         var o = rec.Recorder ?? (ours ? RecorderOverride.On : RecorderOverride.Default);
+        s = s with { RecorderOverride = o, AntiCheatRecordingAllowed = rec.AntiCheatRecordingAllowed };
+        var skip = RecorderSkip(s, ModSkip(s.Game, exeDir, rec, ours)) ?? _recorderSkips.GetValueOrDefault(s.Game.Id);
         var db = Length(Path.Combine(exeDir, "scskiller.db"));
         return s with { RecorderOverride = o, RecorderSkip = skip, RecorderEffective = RecorderEffective(o, Settings.RecordAllGames && s.NoStutter == null, skip),
             RecorderNote = _recorderNotes.GetValueOrDefault(s.Game.Id), RecorderMod = ModName(exeDir, rec, ours),
@@ -1266,7 +1277,8 @@ public sealed partial class ScsKiller : IScsKiller
         }
         if (!fresh)
         {
-            if (hit!.AntiCheat != AntiCheat.None) TakeOutNow(g, $"{hit.AntiCheat} found");
+            if (hit!.AntiCheat != AntiCheat.None && !(rec.AntiCheatRecordingAllowed && rec.Recorder == RecorderOverride.On))
+                TakeOutNow(g, $"{hit.AntiCheat} found");
             else if ((GameFiles.DetectAntiCheat(g, quick: true) is var near and not AntiCheat.None ? near
                          : RecorderMayGoIn(g, rec, hit.Engine) ? FullCheckOnChange(g) : AntiCheat.None) is not AntiCheat.None and var found)
             {
@@ -2948,7 +2960,7 @@ public sealed partial class ScsKiller : IScsKiller
     /// <summary>Null = compatible. Writability is only known by writing (Reconcile remembers a refusal), except WindowsApps.
     /// <paramref name="modSkip"/>: <see cref="ModSkip"/>.</summary>
     public static string? RecorderSkip(GameState s, string? modSkip) =>
-        s.AntiCheat != AntiCheat.None ? SkipAntiCheat   // any value but None, "Other" included
+        s.AntiCheat != AntiCheat.None && !(s.AntiCheatRecordingAllowed && s.RecorderOverride == RecorderOverride.On) ? SkipAntiCheat
         : s.ShaderModBlocks ? SkipShaderMod
         : s.RootUnconfirmed ? SkipManual
         : s.StreamlineFirst ? SkipStreamline   // its status is Unsupported for this reason, not "not supported yet"
@@ -3217,9 +3229,27 @@ public sealed partial class ScsKiller : IScsKiller
             var s = Find(gameId);
             if (Unconfirmed(s.Game) && value == RecorderOverride.On) return;   // not before its folder is confirmed; Off takes one out
             var rec = Store.LoadGame(gameId);
+            if (rec.AntiCheatRecordingAllowed && value != RecorderOverride.On) Disarm(s.Game);
             rec.Recorder = value;
+            if (value != RecorderOverride.On) rec.AntiCheatRecordingAllowed = false;
             Store.SaveGame(gameId, rec);
             if (!Reconcile(s)) Refresh(s.Game);   // the override shows either way
+        }
+    }
+
+    public void SetAntiCheatRecording(string gameId, bool on)
+    {
+        lock (_recorderLock)
+        {
+            var s = Find(gameId);
+            if (on && Unconfirmed(s.Game)) return;
+            var rec = Store.LoadGame(gameId);
+            if (!on && rec.AntiCheatRecordingAllowed) Disarm(s.Game);
+            rec.AntiCheatRecordingAllowed = on;
+            rec.Recorder = on ? RecorderOverride.On : RecorderOverride.Off;
+            Store.SaveGame(gameId, rec);
+            Refresh(s.Game);   // readiness and RecorderSkip depend on the saved choice
+            if (!Reconcile(Find(gameId))) Refresh(s.Game);
         }
     }
 
@@ -3320,19 +3350,24 @@ public sealed partial class ScsKiller : IScsKiller
         // arming order: the watcher, then the change count, then the full check; a change during it keeps it unarmed
         long gen = 0;
         bool clean = false;
-        if (s.AntiCheat == AntiCheat.None && (ours || rec.RecorderFiles.Count > 0 || rec.RecorderChained != null))
+        if ((s.AntiCheat == AntiCheat.None || rec.AntiCheatRecordingAllowed && rec.Recorder == RecorderOverride.On)
+            && (ours || rec.RecorderFiles.Count > 0 || rec.RecorderChained != null))
         {
             WatchOrDisarm(g);
             gen = InstallGen(g);
             if (FullCheckOnChange(g) is not AntiCheat.None and var found)
             {
-                AntiCheatFound(g, found);   // takes it out, or when the game exits
-                Refresh(g);
-                return true;
+                AntiCheatFound(g, found);
+                if (!rec.AntiCheatRecordingAllowed || rec.Recorder != RecorderOverride.On)
+                {
+                    Refresh(g);
+                    return true;
+                }
             }
             clean = true;
         }
-        bool want = RecorderEffective(rec.Recorder.Value, Settings.RecordAllGames && s.NoStutter == null, RecorderSkip(s, ModSkip(g, dir, rec, ours)));
+        bool want = RecorderEffective(rec.Recorder.Value, Settings.RecordAllGames && s.NoStutter == null,
+            RecorderSkip(s with { AntiCheatRecordingAllowed = rec.AntiCheatRecordingAllowed, RecorderOverride = rec.Recorder.Value }, ModSkip(g, dir, rec, ours)));
         // another SCSKiller build's proxy, never a newer one's (a release's under a dev build, all 0.0.0.0)
         bool update = want && ours && ProxySha() is { } sha && Sha256(dll) != sha && FileVersion(dll) <= FileVersion(_proxyDll!);
         string? note = null;
@@ -3492,6 +3527,7 @@ public sealed partial class ScsKiller : IScsKiller
     void Install(Game g, GameRecord rec)
     {
         RefuseAntiCheat(g, rec);   // fresh, not the cached scan: a patch may have added one
+        var allowAntiCheat = rec.AntiCheatRecordingAllowed && rec.Recorder == RecorderOverride.On;
         if (!GameFolderWrite(g)) throw new InvalidOperationException($"{g.Name} is running");
         var src = _proxyDll ?? throw new FileNotFoundException("the proxy d3d12.dll was not found next to the app");
         var dir = Path.GetDirectoryName(g.ExePath)!;
@@ -3545,8 +3581,8 @@ public sealed partial class ScsKiller : IScsKiller
             rec.RecorderFiles["d3d12.dll"] = Sha256(dll);
             InstallStep?.Invoke("copied");
             antiCheat = GameFiles.DetectAntiCheat(g, quick: true);   // an update may have added one since the check, likely next to the exe
-            if (antiCheat == AntiCheat.None && !GameFolderWrite(g)) throw new InvalidOperationException($"{g.Name} started while the recorder was installed");
-            if (antiCheat == AntiCheat.None && iniOurs)
+            if (!GameFolderWrite(g)) throw new InvalidOperationException($"{g.Name} started while the recorder was installed");
+            if ((antiCheat == AntiCheat.None || allowAntiCheat) && iniOurs)
             {
                 Place(ini, temp => File.WriteAllText(temp, IniText(g, rec)), replace: true);
                 rec.RecorderFiles["scskiller.ini"] = Sha256(ini);
@@ -3554,8 +3590,8 @@ public sealed partial class ScsKiller : IScsKiller
         }
         catch (Exception e) { failed = e; }
         // the full check before anything that may wait for a lock (the keys file's, the record's)
-        if (antiCheat == AntiCheat.None) antiCheat = GameFiles.DetectAntiCheat(g);
-        if (antiCheat == AntiCheat.None && failed == null)
+        if (antiCheat == AntiCheat.None || allowAntiCheat) antiCheat = GameFiles.DetectAntiCheat(g);
+        if ((antiCheat == AntiCheat.None || allowAntiCheat) && failed == null)
             try
             {
                 InstallStep?.Invoke("keys");
@@ -3564,17 +3600,15 @@ public sealed partial class ScsKiller : IScsKiller
                 // last, after every wait: an update may have added anti-cheat while this one waited for a lock
                 antiCheat = GameFiles.DetectAntiCheat(g);
                 if (antiCheat == AntiCheat.None)
-                {
                     lock (_scanLock) _scan?.Remove(g.Id);   // the next refresh evaluates the game again, its anti-cheat too
-                    return;
-                }
             }
             catch (Exception e) { failed = e; }
         if (antiCheat != AntiCheat.None)
         {
             AntiCheatFound(g, antiCheat, installing: rec);
-            throw AntiCheatRefusal(g, antiCheat);
+            if (!allowAntiCheat) throw AntiCheatRefusal(g, antiCheat);
         }
+        if (failed == null) return;
         TakeOut(g, rec, $"the recorder install failed ({failed!.Message})");
         System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(failed);
     }
@@ -3716,7 +3750,9 @@ public sealed partial class ScsKiller : IScsKiller
     /// record, not saved yet; else the record is read under the recorder lock.</summary>
     void AntiCheatFound(Game g, AntiCheat found, Evaluation? fresh = null, GameRecord? installing = null)
     {
-        Disarm(g);   // first: a launch from now on is a pass-through, whatever the removal does
+        var rec = installing ?? Store.LoadGame(g.Id);
+        var allowed = rec.AntiCheatRecordingAllowed && rec.Recorder == RecorderOverride.On;
+        if (!allowed) Disarm(g);   // first: a launch from now on is a pass-through, whatever the removal does
         bool changed;
         lock (_scanLock)
         {
@@ -3729,7 +3765,7 @@ public sealed partial class ScsKiller : IScsKiller
         }
         lock (_lock)
             if (_games.FindIndex(x => x.Game.Id == g.Id) is var i and >= 0 && _games[i].AntiCheat != found) _games[i] = _games[i] with { AntiCheat = found };
-        TakeOutNow(g, $"{found} found", installing);
+        if (!allowed) TakeOutNow(g, $"{found} found", installing);
         if (!changed) return;
         lock (_scanLock)
             try { Store.SaveScan(_scan); }
@@ -3782,7 +3818,7 @@ public sealed partial class ScsKiller : IScsKiller
         var antiCheat = GameFiles.DetectAntiCheat(g);
         if (antiCheat == AntiCheat.None) return;
         AntiCheatFound(g, antiCheat, installing: rec);
-        throw AntiCheatRefusal(g, antiCheat);
+        if (!rec.AntiCheatRecordingAllowed || rec.Recorder != RecorderOverride.On) throw AntiCheatRefusal(g, antiCheat);
     }
 
     static InvalidOperationException AntiCheatRefusal(Game g, AntiCheat antiCheat) =>
@@ -4877,21 +4913,24 @@ public sealed partial class ScsKiller : IScsKiller
         foreach (var g in _revocationPending.Values)   // a held armed file: revoked again, before anything is armed, and its recorder taken out
         {
             Disarm(g);
-            if (Games.FirstOrDefault(s => s.Game.Id == g.Id) is { AntiCheat: not AntiCheat.None } s)
+            if (Games.FirstOrDefault(s => s.Game.Id == g.Id) is { AntiCheat: not AntiCheat.None } s
+                && !(s.AntiCheatRecordingAllowed && s.RecorderOverride == RecorderOverride.On))
                 try { TakeOutNow(s.Game, $"{s.AntiCheat} found"); }
                 catch (Exception e) when (e is IOException or UnauthorizedAccessException) { RecorderLog($"{s.Game.Name}: removing the recorder failed: {e.Message}"); }
         }
         if (Monitor.TryEnter(_recorderLock))
             try
             {
-                var keep = Games.Where(s => s.RecorderInstalled && s.AntiCheat == AntiCheat.None).Select(s => WatchKey(s.Game)).ToHashSet();
+                var keep = Games.Where(s => s.RecorderInstalled && (s.AntiCheat == AntiCheat.None
+                    || s.AntiCheatRecordingAllowed && s.RecorderOverride == RecorderOverride.On)).Select(s => WatchKey(s.Game)).ToHashSet();
                 lock (_installWatchers)
                     foreach (var key in _installWatchers.Keys.Where(k => !keep.Contains(k)).ToList())
                         if (_installWatchers.Remove(key, out var w)) Unwatch(w);
             }
             finally { Monitor.Exit(_recorderLock); }
         var states = Games;
-        var games = states.Where(s => s.RecorderInstalled && s.AntiCheat == AntiCheat.None).ToDictionary(s => WatchKey(s.Game));
+        var games = states.Where(s => s.RecorderInstalled && (s.AntiCheat == AntiCheat.None
+            || s.AntiCheatRecordingAllowed && s.RecorderOverride == RecorderOverride.On)).ToDictionary(s => WatchKey(s.Game));
         foreach (var s in games.Values) WatchOrDisarm(s.Game);   // made, or made again after a failure (bounded); before the change counts below
         foreach (var (key, s) in games)
             if (!ExeAsArmed(s.Game))   // written in place: no name event; the proxy's fingerprint refuses it, this checks and arms it anew
@@ -4918,11 +4957,14 @@ public sealed partial class ScsKiller : IScsKiller
                 else
                 {
                     AntiCheatFound(p.Game, found);
+                    if (Store.LoadGame(p.Game.Id) is { AntiCheatRecordingAllowed: true, Recorder: RecorderOverride.On })
+                        Arm(p.Game, p.Gen, recheck: true);
                     Refresh(p.Game);
                 }
             }
         }
-        foreach (var s in states.Where(s => s.AntiCheat != AntiCheat.None))
+        foreach (var s in states.Where(s => s.AntiCheat != AntiCheat.None
+            && !(s.AntiCheatRecordingAllowed && s.RecorderOverride == RecorderOverride.On)))
         {
             if (_removalTried.TryGetValue(s.Game.Id, out var at) && at.Elapsed < RemovalRetryInterval) continue;
             var rec = Store.LoadGame(s.Game.Id);
@@ -5098,7 +5140,7 @@ public sealed partial class ScsKiller : IScsKiller
     /// <summary>Next to our proxy: [scskiller] armed=1, the check's time and the exe's fingerprint, written after a clean full
     /// anti-cheat check of the install while a watcher of it runs, and deleted on any change there or any finding. The
     /// proxy records only when it says so at the game's first device; missing or anything else is a pass-through.</summary>
-    public const string ArmedFile = "scskiller.armed";
+    public const string ArmedFile = "scskiller-noac.armed";
     readonly ConcurrentDictionary<string, long> _installGen = new();   // game id -> install changes and findings seen (each disarms)
     readonly object _armLock = new();
 
@@ -5257,7 +5299,7 @@ public sealed partial class ScsKiller : IScsKiller
                 if (!IsOurProxy(Path.Combine(Path.GetDirectoryName(g.ExePath)!, "d3d12.dll")) || BlockingMod(g) != null) return;   // a blocking HDR mod: never recorded
                 var was = Armed(g) && ExeAsArmed(g);
                 DeleteRevocationMark(g.ExePath);   // first; one that can't go keeps it unarmed
-                WriteAttestation(g.ExePath);
+                WriteAttestation(g.ExePath, allowAntiCheat: rec.AntiCheatRecordingAllowed && rec.Recorder == RecorderOverride.On);
                 if (InstallGen(g) != gen || DisarmQueued(g)) RevokeLedgers(g.ExePath);   // a change counted while it was written
                 else
                 {
@@ -5360,7 +5402,7 @@ public sealed partial class ScsKiller : IScsKiller
 
     /// <summary>The app's ledger of armed exes, outside every game folder: an entry per exe holds the nonce its
     /// <see cref="ArmedFile"/> must hold too. The proxy finds it through FOLDERID_LocalAppData.</summary>
-    internal static string LedgerDir { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SCSKiller", "armed");   // replaceable for tests
+    internal static string LedgerDir { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SCSKiller-NoACGate-zh-CN", "armed");   // replaceable for tests
 
     /// <summary>Deletes the exe's revocation mark, on which the proxy refuses. Throws when it can't.</summary>
     internal static void DeleteRevocationMark(string exe)
@@ -5426,13 +5468,14 @@ public sealed partial class ScsKiller : IScsKiller
 
     /// <summary>Arms the exe: a fresh nonce in its ledger entries first, then in <see cref="ArmedFile"/> next to it.
     /// <paramref name="process"/>: for that process alone (its pid and creation FILETIME), an offline session's.</summary>
-    internal static void WriteAttestation(string exe, (int Pid, long Created)? process = null)
+    internal static void WriteAttestation(string exe, (int Pid, long Created)? process = null, bool allowAntiCheat = false)
     {
         var nonce = RandomNumberGenerator.GetHexString(32, lowercase: true);
         var bound = process is { } p ? $"pid={p.Pid}\r\npid_time={p.Created}\r\n" : "";
+        var allowed = allowAntiCheat ? "allow_ac=1\r\n" : "";
         Directory.CreateDirectory(LedgerDir);
-        foreach (var ledger in LedgerFiles(exe)) File.WriteAllText(ledger, $"[scskiller]\r\nnonce={nonce}\r\nexe={Path.GetFullPath(exe)}\r\n{bound}");
-        File.WriteAllText(ArmedFileOf(exe), ArmedText(exe, nonce) + bound);
+        foreach (var ledger in LedgerFiles(exe)) File.WriteAllText(ledger, $"[scskiller]\r\nnonce={nonce}\r\nexe={Path.GetFullPath(exe)}\r\n{allowed}{bound}");
+        File.WriteAllText(ArmedFileOf(exe), ArmedText(exe, nonce) + allowed + bound);
     }
 
     /// <summary><see cref="ArmedFile"/>'s text for the install as it is now: the ledger's nonce, and the exe's size and write

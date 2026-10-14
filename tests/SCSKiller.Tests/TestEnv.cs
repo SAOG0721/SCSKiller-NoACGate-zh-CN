@@ -50,7 +50,7 @@ static partial class TestEnv
     public static readonly string Ledger = Path.Combine(Path.GetTempPath(), "scskiller-test-ledger-" + Guid.NewGuid().ToString("N")[..8], "armed");
 
     /// <summary>The user's live ledger folder: watched and read, never written.</summary>
-    public static readonly string LiveLedger = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SCSKiller", "armed");
+    public static readonly string LiveLedger = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SCSKiller-NoACGate-zh-CN", "armed");
 
     static readonly bool LiveLedgerExisted = Directory.Exists(LiveLedger);
 
