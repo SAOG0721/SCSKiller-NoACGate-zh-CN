@@ -24,7 +24,7 @@
 - [x] 影响行为的状态原因改用 `GameReasonFlags`：反作弊录制门禁、离线会话、缓存不可达、光追录制机会和新版计划器通知不再解析英文 `StatusReason`。`Format.ShortNote` 等显示层仍解析英文原始原因，待继续汉化。
 - [x] 已提供中文 `README.zh-CN.md`，保留上游版权、许可证和来源。
 - [x] CLI 帮助、常见输出及 `record anti-cheat <game> on|off` 已汉化；启用命令始终要求手动确认风险。
-- [ ] CLI 的列表、详情页、录制器常见诊断与队列阶段/进度已改用中文说明；文件系统异常和未知技术型输出继续逐项核对。
+- [ ] CLI 的列表、详情页、录制器常见诊断、安装限制与队列阶段/进度已改用中文说明；文件系统异常和未知技术型输出继续逐项核对。
 
 ## 3. fork 共存与更新
 
@@ -33,7 +33,7 @@
 - [x] 首次欢迎内容改为内置中文 fork 说明，避免上游远程欢迎文案覆盖风险提示；向上游发送匿名活跃检查改为默认关闭，设置页说明发送去向。关于页的源码链接直接打开本 fork 的 GitHub，不再把 Patreon 令牌发往 GitHub。
 - [ ] 首次发布前配置本 fork 自己的更新签名与版本渠道，并审查仍指向上游服务的社区分享/内容入口。
 - [x] 窗口标题已标明 NoACGate 中文版。
-- [ ] 便携版目录、ZIP、CI 附件和草稿 Release 标题的 fork 命名已在本地代码中保持一致。源码改动已推送至 fork 分支 `783af3a`；GitHub Actions 文件目前只能本地提交：命令行凭据缺少 `workflow` 权限，GitHub 连接器更新工作流也返回 403。取得相应权限后推送本地工作流提交，再按实际 tag 验证 CI。
+- [ ] 便携版目录、ZIP、CI 附件和草稿 Release 标题的 fork 命名已在本地代码中保持一致。源码改动已推送至 fork 分支 `176bc46`；当前本地与远端的文件差异仅有 `.github/workflows/build.yml` 和 `release.yml`。GitHub Actions 文件目前只能本地提交：命令行凭据缺少 `workflow` 权限，GitHub 连接器更新工作流也返回 403。取得相应权限后推送本地工作流提交，再按实际 tag 验证 CI。
 - [ ] 首次发布前确定独立的 Velopack 安装包 ID、版本起点、签名密钥和中文发布说明；验证不会覆盖原版安装。
 
 ## 4. 上游链接与自动联网入口（补充）
@@ -49,7 +49,7 @@
 - [x] .NET 10 SDK 已安装在用户目录；Core、WinUI App 和原生代理已构建通过。新增的核心测试通过；隔离 WARP 测试目录中，默认模式不录制，明确许可后生成录制数据。
 - [x] 在隔离测试目录验证安装、撤销、文件变化、与原版代理标记/外来 `d3d12.dll` 的共存行为；假数据截图验证中文 UI。原版代理模拟文件不会被本 fork 认作自己的录制器，已有外来 DLL 不被覆盖；新旧两份本地分发目录可分别保留、回退。此项是合成验证，不代表与实际原版程序同时运行或真实游戏验收。
 - [ ] 实际游戏中是否加载代理、是否录到着色器、反作弊是否阻止/处罚，必须由用户在自愿承担风险的测试环境中单独验收。
-- [x] **本机部署分发版本。**`build/publish.ps1 -NoOodle` 已生成自包含便携 ZIP；当前开发版本为 `0.0.0-internal.0+5f1be07`。独立部署目录原先不存在，因此无需覆盖或迁移。用 `--screenshots` 假数据模式从部署目录启动，不在真实游戏目录安装录制器。旧版 `77db4b2`、`3668dd2` 的部署目录与 ZIP 另行保留作回退；详细记录见下方及各部署目录中的 `deployment-receipt.json`。
+- [x] **本机部署分发版本。**`build/publish.ps1 -NoOodle` 已生成自包含便携 ZIP；当前开发版本为 `0.0.0-internal.0+c851b5a`。独立部署目录原先不存在，因此无需覆盖或迁移。用 `--screenshots` 假数据模式从部署目录启动，不在真实游戏目录安装录制器。旧版 `77db4b2`、`3668dd2`、`5f1be07` 的部署目录与 ZIP 另行保留作回退；详细记录见下方及各部署目录中的 `deployment-receipt.json`。
 
 ### 当前验证记录（2026-10-15）
 
@@ -65,7 +65,9 @@
 - 旧版 `77db4b2` 分发包：`dist\archive\SCSKiller-NoACGate-zh-CN-77db4b2.zip`，SHA-256 `063e90f46fa6dfb6b2e477fa3bbc3103af424a80e09fa3067b1301687d73b2f0`，118 MiB，727 个文件。部署目录：`%LOCALAPPDATA%\Codex\Deployments\SCSKiller-NoACGate-zh-CN-77db4b2\SCSKiller-NoACGate-zh-CN`。压缩包与部署目录的文件名集合一致，9 个关键文件哈希一致；没有 Oodle DLL。部署版 `--screenshots` 退出码 0，生成 229 张截图；已检查关于页的 fork 名称、中文反作弊卡片和“自动更新暂时停用”。部署版 CLI `--help` 显示中文。回退方式：关闭本 fork 后，核实该独立部署目录的绝对路径再移除；此次没有覆盖既有目录或原版安装。
 - 上一条 `77db4b2` ZIP 已移至 `dist\archive\SCSKiller-NoACGate-zh-CN-77db4b2.zip` 并复核原 SHA-256，原部署目录保留。新一轮社区、分享和队列汉化：相关 62 项定向测试中 61 项通过，唯一失败为中文标点断言，修复后该项定向重跑通过；WinUI、CLI Release 均构建通过。
 - 上一版 `3668dd2` ZIP 已移至 `dist\archive\SCSKiller-NoACGate-zh-CN-3668dd2.zip`，SHA-256 `2b292e03fe7a7388387960f6f5c2a803691f0032c2112c0c2bc17effea76d956`；该部署目录仍保留。
-- 当前分发包：`dist\SCSKiller-NoACGate-zh-CN.zip`，SHA-256 `05b60dd5e18f19a2e73fbe48ef2f0e3c3370cab205a8b73d2f2259a54aab7d4f`，727 个文件，无 Oodle DLL；部署目录 `%LOCALAPPDATA%\Codex\Deployments\SCSKiller-NoACGate-zh-CN-5f1be07\SCSKiller-NoACGate-zh-CN`。ZIP 与部署目录的文件名集合及 9 个关键文件哈希一致。从该目录运行 `--screenshots` 假数据模式退出码 0，生成 229 张截图；已检查反作弊录制卡片和关于页，没有明显截断，关于页显示 fork 名称及自动更新暂停。CLI `--help` 显示中文。交付记录在部署根目录的 `deployment-receipt.json`。回退时关闭本 fork，核实绝对路径后仅移除新目录；旧版部署目录和 ZIP 均保留。真实游戏中的加载、录制和反作弊结果仍待用户单独验收。
+- 上一版 `5f1be07` ZIP 已移至 `dist\archive\SCSKiller-NoACGate-zh-CN-5f1be07.zip`，SHA-256 `05b60dd5e18f19a2e73fbe48ef2f0e3c3370cab205a8b73d2f2259a54aab7d4f`；部署目录仍保留。
+- 当前分发包：`dist\SCSKiller-NoACGate-zh-CN.zip`，SHA-256 `48e50049ff29f6917d9f1674cffa8f10899d276ea30b9792104a2ae04f784313`，727 个文件，无 Oodle DLL；部署目录 `%LOCALAPPDATA%\Codex\Deployments\SCSKiller-NoACGate-zh-CN-c851b5a\SCSKiller-NoACGate-zh-CN`。ZIP 与部署目录的文件名集合及 9 个关键文件哈希一致。从该目录运行 `--screenshots` 假数据模式退出码 0，生成 229 张截图；已检查反作弊录制卡片和关于页，没有明显截断，关于页显示 fork 名称及自动更新暂停。CLI `--help` 显示中文。交付记录在部署根目录的 `deployment-receipt.json`。回退时关闭本 fork，核实绝对路径后仅移除新目录；旧版部署目录和 ZIP 均保留。真实游戏中的加载、录制和反作弊结果仍待用户单独验收。
+- 录制器文案补漏：GUI/CLI 共用中文安装限制与排队状态，OptiScaler 串接限制和未确认反作弊风险时的拒绝提示已汉化。相关 28 项定向测试及 WinUI、CLI 构建通过。
 - 本轮复核代理 `admitted()` 与核心层 `SetAntiCheatRecording`、安装复查、撤销路径；两处 `allow_ac=1` 匹配后才跳过代理自身的反作弊拒绝检查。隔离目录中 15 项针对原版标记、外来 DLL、逐游戏许可、撤销和文件变化的测试通过。修正了源码与准入文件中仍称“无反作弊检查”的过时注释；功能路径未变。
 
 ## 已确认的源码入口
