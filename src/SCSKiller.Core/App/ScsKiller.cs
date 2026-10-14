@@ -3023,8 +3023,8 @@ public sealed partial class ScsKiller : IScsKiller
     /// under the other names it supports, beside the recorder.</summary>
     public static string NotChainableReason(string? mod) =>
         mod?.StartsWith("OptiScaler", StringComparison.OrdinalIgnoreCase) == true
-            ? "OptiScaler is installed as d3d12.dll, and renamed it stops working (it picks its role from its file name). To record alongside it, rename it to dxgi.dll (or winmm.dll or version.dll if a dxgi.dll is already there): OptiScaler supports those names"
-            : $"{mod ?? "another mod"} is installed as d3d12.dll, and the recorder can't run alongside it: renamed it stops working";
+            ? "OptiScaler 当前以 d3d12.dll 安装；重命名会使其失效，因为它按文件名选择功能。如需与录制器同时使用，请将其改名为 dxgi.dll（若已有 dxgi.dll，可改为 winmm.dll 或 version.dll）；OptiScaler 支持这些名称。"
+            : $"{mod ?? "其他模组"} 当前以 d3d12.dll 安装；重命名会使其失效，因此录制器无法与它同时运行。";
 
     /// <summary>What the game folder's d3d12.dll that isn't SCSKiller's (or the one chained to it) calls itself, for "Record
     /// alongside &lt;mod&gt;"; null = none there.</summary>
@@ -3833,7 +3833,7 @@ public sealed partial class ScsKiller : IScsKiller
     }
 
     static InvalidOperationException AntiCheatRefusal(Game g, AntiCheat antiCheat) =>
-        new($"{g.Name} uses {antiCheat}: a d3d12.dll in its folder could get the account banned. Not installing.");
+        new($"{g.Name} 检测到 {antiCheat}：游戏目录中的 d3d12.dll 可能导致账号受到处罚。尚未确认录制风险，不会安装录制器。");
 
     string IniText(Game g, GameRecord rec)
     {

@@ -3661,7 +3661,7 @@ public partial class AppTests : IDisposable
         var s = k.Games.Single();
         Assert.Equal(ScsKiller.SkipModNotChainable, s.RecorderSkip);
         Assert.StartsWith("OptiScaler", s.RecorderMod);
-        Assert.Contains("rename it to dxgi.dll", ScsKiller.NotChainableReason(s.RecorderMod));
+        Assert.Contains("改名为 dxgi.dll", ScsKiller.NotChainableReason(s.RecorderMod));
         Assert.Equal(opti, File.ReadAllBytes(Path.Combine(_exeDir, "d3d12.dll")));   // never renamed
         Assert.False(File.Exists(Path.Combine(_exeDir, ScsKiller.ChainName)));
     }

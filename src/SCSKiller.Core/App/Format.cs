@@ -167,6 +167,36 @@ public static class Format
         };
     }
 
+    public static string RecorderSkip(string reason) => reason switch
+    {
+        ScsKiller.SkipAntiCheat => "未获得此游戏的反作弊录制许可",
+        ScsKiller.SkipForeignDll => "此位置已有其他 d3d12.dll",
+        ScsKiller.SkipModNotChainable => "现有 d3d12.dll 重命名后无法正常工作",
+        ScsKiller.SkipVulkanMod => "vkd3d-proton 使用 Vulkan，DirectX 12 预热无法覆盖它",
+        ScsKiller.SkipNeedsAdmin => "游戏目录需要管理员权限",
+        ScsKiller.SkipNotDx12 => "游戏未使用 DirectX 12",
+        ScsKiller.SkipUnsupported => "当前尚不支持此游戏",
+        ScsKiller.SkipPackageD3D12 => "游戏包根目录的 d3d12.dll 会先于录制器加载",
+        ScsKiller.SkipShaderMod => "HDR 模组会改变全部管线",
+        ScsKiller.SkipStreamline => "NVIDIA DLSS 会先于录制器加载 DirectX 12",
+        ScsKiller.SkipManual => "尚未确认游戏目录",
+        _ => reason,
+    };
+
+    public static string RecorderNote(string note) => note switch
+    {
+        "removed when the game exits" => "游戏退出后移除",
+        "installs when the game exits" => "游戏退出后安装",
+        "updates when the game exits" => "游戏退出后更新",
+        "moves when the game exits" => "游戏退出后移动",
+        "couldn't remove: the game holds it" => "无法移除：游戏仍在使用录制器",
+        _ when note.StartsWith("couldn't install: ", StringComparison.Ordinal) => "无法安装：" + note["couldn't install: ".Length..],
+        _ when note.StartsWith("couldn't remove: ", StringComparison.Ordinal) => "无法移除：" + note["couldn't remove: ".Length..],
+        _ when note.StartsWith("couldn't update: ", StringComparison.Ordinal) => "无法更新：" + note["couldn't update: ".Length..],
+        _ when note.StartsWith("couldn't move: ", StringComparison.Ordinal) => "无法移动：" + note["couldn't move: ".Length..],
+        _ => note,
+    };
+
     /// <summary>Queue notes are diagnostic values in Core; translate the known ones only when shown to a player.</summary>
     public static string QueueNote(string note)
     {

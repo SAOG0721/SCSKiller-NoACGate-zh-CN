@@ -428,12 +428,12 @@ async Task<int> Record()
     {
         bool on = args[3] == "on";
         if (on && g.AntiCheat == AntiCheat.None) return Fail($"{g.Game.Name} 当前未检测到反作弊；普通录制请使用 record install");
-        if (on && !Confirm($"检测到 {g.AntiCheat}。直接录制会在游戏目录放入 d3d12.dll；游戏可能拒绝运行、判定篡改或封禁账号。"
+        if (on && !Confirm($"检测到 {AntiCheatName(g.AntiCheat)}。直接录制会在游戏目录放入 d3d12.dll；游戏可能拒绝运行、判定篡改或封禁账号。"
             + "此选项只解除 SCSKiller 自身的门禁，不会关闭或绕过游戏反作弊。仍要开启吗？")) return 1;
         k.SetAntiCheatRecording(g.Game.Id, on);
         var state = k.Games.Single(s => s.Game.Id == g.Game.Id);
         Console.WriteLine($"{g.Game.Name}：反作弊直接录制许可已{(on ? "开启" : "关闭")}；录制器{(state.RecorderInstalled ? "已安装" : "未安装")}" +
-            (state.RecorderSkip is { } skip ? $"；原因：{skip}" : state.RecorderNote is { } note ? $"；状态：{note}" : ""));
+            (state.RecorderSkip is { } skip ? $"；原因：{Format.RecorderSkip(skip)}" : state.RecorderNote is { } note ? $"；状态：{Format.RecorderNote(note)}" : ""));
         return 0;
     }
     if (args[1] == "clear")
@@ -450,8 +450,9 @@ async Task<int> Record()
         var mod = k.RecorderMod(g.Game.Id);
         k.SetRecordAlongsideMod(g.Game.Id, args[3] == "on");
         var s = k.Games.Single(x => x.Game.Id == g.Game.Id);
-        Console.WriteLine($"与 {mod ?? "mod"} 串接录制：{args[3]}；录制器{(s.RecorderInstalled ? "已安装" : "未安装")}"
-            + ((s.RecorderSkip == ScsKiller.SkipModNotChainable ? ScsKiller.NotChainableReason(s.RecorderMod) : s.RecorderSkip ?? s.RecorderNote) is { } why ? $" ({why})" : ""));
+        Console.WriteLine($"与 {mod ?? "其他模组"} 串接录制：{(args[3] == "on" ? "开启" : "关闭")}；录制器{(s.RecorderInstalled ? "已安装" : "未安装")}"
+            + ((s.RecorderSkip == ScsKiller.SkipModNotChainable ? ScsKiller.NotChainableReason(s.RecorderMod)
+                : s.RecorderSkip is { } skip ? Format.RecorderSkip(skip) : s.RecorderNote is { } note ? Format.RecorderNote(note) : null) is { } why ? $"（{why}）" : ""));
         return 0;
     }
     if (args[1] == "install") k.InstallRecorder(g.Game.Id); else k.UninstallRecorder(g.Game.Id);

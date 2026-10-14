@@ -65,6 +65,8 @@ public class FormatTests
     {
         Assert.Contains("反作弊客户端", Format.RecorderRefused("The last launch wasn't recorded: anti-cheat client loaded."));
         Assert.Contains("目前无法判断", Format.RecorderRefused(ScsKiller.NeverSawNote));
+        Assert.Contains("反作弊录制许可", Format.RecorderSkip(ScsKiller.SkipAntiCheat));
+        Assert.Equal("游戏退出后安装", Format.RecorderNote("installs when the game exits"));
     }
 
     [Fact]
