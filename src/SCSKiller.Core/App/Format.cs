@@ -59,7 +59,7 @@ public static class Format
             GameStatus.Warmed when ScsKiller.BothApis(s.Plan) => "DirectX 11 and 12" + (ScsKiller.IsPartial(s.Plan) ? " · partly covered" : ""),
             GameStatus.Warmed => $"Driver {s.WarmedDriverVersion}" + (ScsKiller.IsPartial(s.Plan) ? " · partly covered" : ""),
             GameStatus.Stale => StaleNote(r),
-            GameStatus.NeedsRecording when r == ScsKiller.OfflineSessionNote => r,
+            GameStatus.NeedsRecording when s.ReasonFlags.HasFlag(GameReasonFlags.OfflineSessionRequired) => r,
             GameStatus.NeedsRecording when s.NoStutter != null && !s.RecorderInstalled => "Compiling isn't needed",
             GameStatus.NeedsRecording when s.RecordingPaused => "Recording paused: limit reached",
             GameStatus.NeedsRecording when ScsKiller.NeverRecorded(s) => null,   // the title: ScsKiller.NothingRecordedTitle
@@ -80,7 +80,7 @@ public static class Format
             GameStatus.Ready when Starts("compiles every DirectX 11 shader") => "DirectX 11",
             GameStatus.Ready => null,
             _ when s.ShaderModBlocks => $"{s.ShaderMod} changes all its pipelines",
-            _ when s.AntiCheat != AntiCheat.None && Starts("needs a recording, which") => $"Blocked by {AntiCheatName(s.AntiCheat)}" + (s.InCommunityDb == true ? " · in the community database" : ""),
+            _ when s.ReasonFlags.HasFlag(GameReasonFlags.AntiCheatRecordingBlocked) => $"Blocked by {AntiCheatName(s.AntiCheat)}" + (s.InCommunityDb == true ? " · in the community database" : ""),
             _ when Has(ScsKiller.ManualNoRecording) => "Needs a recording: confirm its folder",
             _ when s.Engine?.Encrypted == true => null,   // the title: "Encrypted game files"
             _ when s.Engine?.Unsupported is { } u => u.StartsWith("no D3D shaders", StringComparison.Ordinal) ? "No DirectX shaders" : "Engine not supported yet",

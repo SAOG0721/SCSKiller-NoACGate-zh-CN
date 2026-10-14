@@ -40,62 +40,46 @@ public sealed record Notice(string Name, string Version, string Licence, string 
     /// <summary>The SPDX id, or what a LicenseRef / NOASSERTION means in words.</summary>
     public string LicenceName => Licence switch
     {
-        "NOASSERTION" => "No licence stated",
-        _ when Licence.StartsWith("LicenseRef-Microsoft") => "Microsoft licence",
-        _ when Licence.EndsWith("Proprietary") => "Proprietary",
+        "NOASSERTION" => "未声明许可证",
+        _ when Licence.StartsWith("LicenseRef-Microsoft") => "Microsoft 许可证",
+        _ when Licence.EndsWith("Proprietary") => "专有软件",
         _ => Licence,
     };
     public string Detail => $"{LicenceName} · {Copyright}";
     public bool HasNote => Note.Length > 0;
-    public string Body => Text.Length > 0 ? Text : "No licence text is published with it.";
+    public string Body => Text.Length > 0 ? Text : "此组件未随附许可证正文。";
 }
 
 public sealed class AboutVm : Bindable
 {
-    public string Version { get; } = "Version " + (typeof(AboutVm).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "?")
-        + $" · {char.ToUpperInvariant(AppVersion.Current.Channel[0])}{AppVersion.Current.Channel[1..]} channel";
+    public string Version { get; } = "版本 " + (typeof(AboutVm).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "?")
+        + $" · {AppVersion.Current.Channel} 渠道";
 
-    // "Download source code": stable opens the public repo's tag; alpha and beta
-    // fetch the source zip served next to the package (with the access token) into Downloads; none on internal/dev builds.
-    public bool ShowsSource { get; } = UpdateFeeds.Source(AppVersion.Current) != null && (AppVersion.Current.Channel == UpdateChannels.Stable || App.Account.SignedIn);
+    // Every published channel's source link stays on this fork's GitHub; no Patreon token is sent there.
+    public bool ShowsSource { get; } = UpdateFeeds.Source(AppVersion.Current) != null;
     public bool SourceIdle { get; private set; } = true;
     public string SourceStatus { get; private set; } = "";
 
-    public async Task GetSourceAsync()
+    public Task GetSourceAsync()
     {
-        var v = AppVersion.Current;
-        var url = UpdateFeeds.Source(v)!;
-        if (v.Channel == UpdateChannels.Stable)
-        {
-            Process.Start(new ProcessStartInfo(url.AbsoluteUri) { UseShellExecute = true })?.Dispose();
-            return;
-        }
-        (SourceIdle, SourceStatus) = (false, "Downloading…");
-        Changed();
         try
         {
-            using var http = new HttpClient(RouteFailover.Default, disposeHandler: false) { Timeout = TimeSpan.FromMinutes(10) };
-            using var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.Authorization = new("Bearer", await App.Account.GetAccessTokenAsync() ?? throw new InvalidOperationException("sign in with Patreon first"));
-            using var r = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
-            r.EnsureSuccessStatusCode();
-            var file = Path.Combine(Windows.Storage.UserDataPaths.GetDefault().Downloads, $"SCSKiller-source-{v}.zip");
-            await using (var f = File.Create(file + ".partial")) await r.Content.CopyToAsync(f);
-            File.Move(file + ".partial", file, overwrite: true);
-            SourceStatus = "Saved to " + file;
+            var url = UpdateFeeds.Source(AppVersion.Current)!;
+            Process.Start(new ProcessStartInfo(url.AbsoluteUri) { UseShellExecute = true })?.Dispose();
+            SourceStatus = "已在浏览器中打开本 fork 的源码。";
         }
-        catch (Exception e) { SourceStatus = "Couldn't download it: " + e.Message; }
-        SourceIdle = true;
+        catch (Exception e) { SourceStatus = "无法打开源码链接：" + e.Message; }
         Changed();
+        return Task.CompletedTask;
     }
 
     // "Check for updates": every installed build (the design data shows it too); the state of the update next to it.
-    public bool ShowsCheck { get; } = Updater.Installed || App.Core is Design.FakeScsKiller;
+    public bool ShowsCheck { get; } = Updater.Installed;
     public bool CanCheck => !Updater.Checking && !Updater.Restarting;
-    public string UpdateNote => Updater.Downloading is { } d ? $"Downloading SCSKiller {d}…"
-        : Updater.Checking ? "Checking for updates…"
+    public string UpdateNote => Updater.Downloading is { } d ? $"正在下载 SCSKiller {d}…"
+        : Updater.Checking ? "正在检查更新…"
         : Updater.Ready is { } v ? AutoInstall.ReadyNote(v, App.Core.Settings)
-        : Updater.UpToDate ? "SCSKiller is up to date." : "";
+        : Updater.UpToDate ? "SCSKiller 已是最新版本。" : "";
     public string? UpdateProblem => Updater.Problem;
     public bool HasUpdateProblem => Updater.Problem != null;
 

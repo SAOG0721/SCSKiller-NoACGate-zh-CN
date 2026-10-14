@@ -226,6 +226,19 @@ public interface IWarmer
 
 public enum GameStatus { Unsupported, NeedsRecording, Ready, Warmed, Stale }   // Stale: driver or game changed since the warm
 
+/// <summary>Stable facts behind selected status explanations. UI text may be localized without changing decisions.</summary>
+[Flags]
+public enum GameReasonFlags
+{
+    None = 0,
+    CacheUnreachable = 1,
+    AntiCheatRecordingBlocked = 2,
+    OfflineSessionRequired = 4,
+    RayTracingRecordingAvailable = 8,
+    PlannerExpanded = 16,
+    PlannerUntested = 32,
+}
+
 public sealed record SessionStats(TimeSpan Duration, long Requests, long FromGameLibrary, long CacheHits, long Compiles, double WorstCompileMs,
     long RayQueryRecompiles = 0,    // NVIDIA: creates of compiled RayQuery PSOs at the driver's floor (SessionLog.RayQueryFloorMs), not in Compiles
     long StateObjectsReady = 0,     // ray tracing state object creates (CreateStateObject, AddToStateObject) under SessionLog.StateObjectCompileMs; in Requests only
@@ -280,7 +293,8 @@ public sealed record GameState(
     bool CompileUnreached = false,     // NVIDIA: the warm's pipelines didn't serve the game (ScsKiller.IsUnreached): never queued but by hand
     bool NotPlanned = false,           // Unsupported by an "unsupported" verdict, or for a recording its anti-cheat blocks: not planned, unlike "unsupported-yet"
     bool NewOnly = false,              // Stale only for pipelines its last warm didn't compile (ScsKiller.StaleReason past WarmChanged): the rest still serve
-    bool AntiCheatRecordingAllowed = false); // explicit per-game permission; anti-cheat detection remains visible
+    bool AntiCheatRecordingAllowed = false, // explicit per-game permission; anti-cheat detection remains visible
+    GameReasonFlags ReasonFlags = GameReasonFlags.None);
 
 /// <summary>A launch's frame times from the recorder (<see cref="App.FrameLog"/>): its length, the startup stretch before
 /// play (the game's own precompile and first load), the 1% low of play, every frame of 50 ms or more, and for a graph
@@ -339,7 +353,7 @@ public sealed record Settings(int Threads, WarmPriority Priority, DriverUpdateMo
     bool RecordAllGames = true,     // unless a game's RecorderOverride says otherwise
     int RecordingLimitMB = 1024,    // per game: the recorder's db plus SCSKiller's copy of it; 0 = unlimited
     bool NotifyNewShaders = true,   // a notification when compiled games have new pipelines to compile (NewShaders)
-    bool ActiveCheck = true,        // the anonymous daily check that counts active installs (ScsKiller.ActiveCheck); off = nothing is sent
+    bool ActiveCheck = false,       // this fork does not send an active-install check to the upstream service by default
     string? GpuNoticeDismissed = null,   // the GPU name whose "doesn't compile on this GPU" notice was closed (Format.GpuNotice)
     bool InstallUpdatesAutomatically = true,   // a downloaded update installs at the next start or quit (AutoInstall); off = only "Restart to update"
     bool ScanAtStart = true,   // a scan the user didn't ask for reads every game again where it changed; off = the last list (ScsKiller.Listed)

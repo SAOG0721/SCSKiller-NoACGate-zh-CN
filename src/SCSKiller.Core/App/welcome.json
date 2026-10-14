@@ -1,12 +1,12 @@
 {
-  "title": "Welcome to SCSKiller",
+  "title": "欢迎使用 SCSKiller-NoACGate-zh-CN",
   "paragraphs": [
-    "SCSKiller is free and open source. Everything it does on your PC is free, with no account needed.",
-    "Patreon supporters get access to the community shader hash database and to beta and alpha builds. Patreon pays for the servers that run it.",
-    "Once a day the app tells our server that an install is active, with its version and GPU vendor and no identifier; you can turn that off in Settings."
+    "这是 SCSKiller 的简体中文 fork。检测到反作弊的游戏可以在详情页查看风险警告后逐个选择直接录制；游戏仍可能拒绝注入、无法启动或处罚账号。",
+    "本地编译和录制不需要账号。使用 Patreon 社区数据库、向社区分享着色器哈希或启用匿名活跃检查时，会连接上游服务；分享和活跃检查默认关闭。",
+    "本 fork 的更新包由本仓库单独发布。发布前请以 GitHub 仓库中的说明为准。"
   ],
-  "link": { "text": "About supporting SCSKiller", "url": "https://scskiller.com/support" },
-  "share": "Help improve the community shader hash database (shared anonymously)",
-  "signIn": "Sign in with Patreon",
-  "dismiss": "Continue without"
+  "link": null,
+  "share": "向上游社区数据库匿名分享着色器哈希（自愿开启）",
+  "signIn": "使用 Patreon 登录",
+  "dismiss": "暂不登录"
 }

@@ -6127,6 +6127,7 @@ public partial class AppTests : IDisposable
         Assert.Equal(QueueStage.Done, k.Queue.Single().Stage);   // the rest compiled
         var s = k.Games.Single();
         Assert.Equal((GameStatus.Warmed, true, "Ray tracing needs a 5-min recording"), (s.Status, ScsKiller.RtAfterRecording(s), Format.ShortNote(s)));
+        Assert.True(ScsKiller.RtAfterRecording(s with { StatusReason = "光追需要录制" }));
         Assert.EndsWith("; " + ScsKiller.RtAfterRecordingNote, s.StatusReason);
 
         var rec = k.Store.LoadGame(_game.Id);   // planned, not compiled yet
@@ -8607,6 +8608,7 @@ public partial class AppTests : IDisposable
             return;
         }
         Assert.Equal((GameStatus.Unsupported, ScsKiller.CantReachReason), (k.Games.Single().Status, k.Games.Single().StatusReason));
+        Assert.True(k.Games.Single().ReasonFlags.HasFlag(GameReasonFlags.CacheUnreachable));
         k.Enqueue(game.Id);   // the command line's compile queues through it too
         Assert.Equal(QueueStage.Done, Assert.Single(k.Queue).Stage);   // the first compile's, not queued again
         var newer = Killer(new FakeReader(Unreal), game: game, driver: "100.02");
@@ -11106,7 +11108,7 @@ public partial class AppTests : IDisposable
         await k.ActiveCheckSent;
         Assert.Empty(fake.Log);   // the command line sets none
 
-        k.Settings = k.Settings with { ShareRecordings = true };
+        k.Settings = k.Settings with { ShareRecordings = true, ActiveCheck = true };   // the fork defaults the upstream check off
         k.Sharing = new Sharing(Path.Combine(_root, "data"), () => k.Settings.ShareRecordings, routes);
         k.ActiveCheck = new ActiveCheck(Path.Combine(_root, "data"), () => k.Settings.ActiveCheck, k.Vendor.Vendor, AppVersion.Parse("1.2.3"), routes);
         for (var i = 0; i < 2; i++)

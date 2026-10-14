@@ -24,7 +24,7 @@ public sealed partial class DetailPage : Page
 
     public ContentDialog PartlyWhyDialog() => new()
     {
-        XamlRoot = XamlRoot, Title = $"Why is {Vm.Name} partly compiled?", CloseButtonText = "Close",
+        XamlRoot = XamlRoot, Title = $"为什么 {Vm.Name} 只完成了部分编译？", CloseButtonText = "关闭",
         Content = new TextBlock { Text = DetailVm.PartlyCompiledWhy, TextWrapping = TextWrapping.Wrap },
     };
 
@@ -49,11 +49,11 @@ public sealed partial class DetailPage : Page
     async void OnGameFolder(object _, RoutedEventArgs __)
     {
         var game = Vm.Row.State.Game;
-        if (await GameFolderDialog.ShowAsync(XamlRoot, game, $"{game.Name}'s folder", "Save") is not { } folder) return;
+        if (await GameFolderDialog.ShowAsync(XamlRoot, game, $"{game.Name} 的目录", "保存") is not { } folder) return;
         try { await Task.Run(() => App.Core.AddManualGame(game.ExePath, folder)); }   // checks the folder again, then the game
         catch (Exception ex)
         {
-            await App.ShowAsync(new ContentDialog { XamlRoot = XamlRoot, Title = "Couldn't set the game folder", Content = ex.Message, CloseButtonText = "OK" });
+            await App.ShowAsync(new ContentDialog { XamlRoot = XamlRoot, Title = "无法设置游戏目录", Content = ex.Message, CloseButtonText = "确定" });
             return;
         }
         Vm.Refresh();
@@ -62,13 +62,13 @@ public sealed partial class DetailPage : Page
     async void OnRemoveGame(object _, RoutedEventArgs __)
     {
         var id = Vm.Row.Id;
-        if (!await App.ConfirmAsync(this, $"Remove {Vm.Name} from the library?",
-                "SCSKiller forgets the game and takes its recorder out of the game's folder. The game's own files stay, and you can add it again any time.",
-                "Remove")) return;
+        if (!await App.ConfirmAsync(this, $"从游戏库移除 {Vm.Name}？",
+                "SCSKiller 会忘记此游戏并从其目录卸载录制器。游戏自带文件会保留，你随时可以重新添加。",
+                "移除")) return;
         try { await Task.Run(() => App.Core.RemoveManualGame(id)); }   // refused while a compile of it runs
         catch (Exception ex) when (ex is InvalidOperationException or IOException or UnauthorizedAccessException)
         {
-            await App.ShowAsync(new ContentDialog { XamlRoot = XamlRoot, Title = "Couldn't remove the game", Content = ex.Message, CloseButtonText = "OK" });
+            await App.ShowAsync(new ContentDialog { XamlRoot = XamlRoot, Title = "无法移除游戏", Content = ex.Message, CloseButtonText = "确定" });
             return;
         }
         App.Main.Navigate(typeof(LibraryPage));
@@ -176,16 +176,16 @@ public sealed partial class DetailPage : Page
     async void OnClearCache(object _, RoutedEventArgs __)
     {
         var (vm, id) = (Vm, Vm.Row.Id);
-        var note = "The game will compile shaders during play again until you re-warm it."
-            + (!vm.NoAntiCheat ? " Anti-cheat game: only the driver cache is cleared." : "");
-        var text = new TextBlock { TextWrapping = TextWrapping.Wrap, Text = "Measuring the cache files…\n\n" + note };
+        var note = "重新预热前，游戏可能在游玩时再次编译着色器。"
+            + (!vm.NoAntiCheat ? " 检测到反作弊：这里只清理驱动缓存。" : "");
+        var text = new TextBlock { TextWrapping = TextWrapping.Wrap, Text = "正在统计缓存文件…\n\n" + note };
         var ownText = new TextBlock { TextWrapping = TextWrapping.Wrap };
         var alsoOwn = new CheckBox { Content = ownText, Visibility = Visibility.Collapsed };
         _ = Measure();
-        if (await App.ShowAsync(App.Confirm(this, $"Clear the shader cache of {vm.Name}?", new StackPanel { Spacing = 12, Children = { text, alsoOwn } }, "Clear cache"))
+        if (await App.ShowAsync(App.Confirm(this, $"清理 {vm.Name} 的着色器缓存？", new StackPanel { Spacing = 12, Children = { text, alsoOwn } }, "清理缓存"))
             != ContentDialogResult.Primary) return;
         var withOwn = alsoOwn.IsChecked == true;
-        try { vm.Error = await Task.Run(() => App.Core.ClearGameCache(id, withOwn)) ? null : "Nothing was cleared: no shader-cache files of this game were found."; }
+        try { vm.Error = await Task.Run(() => App.Core.ClearGameCache(id, withOwn)) ? null : "未清理任何文件：没有找到此游戏的着色器缓存。"; }
         catch (Exception ex) { vm.Error = ex.Message; }
         vm.ReadCaches();
         vm.Refresh();
@@ -198,8 +198,8 @@ public sealed partial class DetailPage : Page
                 var all = await Task.Run(() => App.Core.GameCaches(id, gamePrecache: true));
                 static bool Own(CachePart p) => p.Name is Core.App.ScsKiller.PipelinePart or Core.App.ScsKiller.PrecachePart;
                 var (parts, own) = (all.Where(p => !Own(p)).ToList(), all.Where(Own).ToList());
-                text.Text = (parts.Count > 0 ? string.Join(" · ", parts.Select(p => $"{p.Name} {Format.Bytes(p.Bytes)}")) : "No cache files on disk now") + ".\n\n" + note;
-                ownText.Text = $"Also delete the game's own shader cache ({Format.Bytes(own.Sum(p => p.Bytes))}). It rebuilds it at its next start, which then takes longer.";
+                text.Text = (parts.Count > 0 ? string.Join(" · ", parts.Select(p => $"{p.Name} {Format.Bytes(p.Bytes)}")) : "磁盘上当前没有缓存文件") + "。\n\n" + note;
+                ownText.Text = $"同时删除游戏自己的着色器缓存（{Format.Bytes(own.Sum(p => p.Bytes))}）。下次启动时会重新生成，启动时间可能更长。";
                 alsoOwn.Visibility = own.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
             }
             catch (Exception ex) { text.Text = Describe(ex) + "\n\n" + note; }
@@ -209,13 +209,13 @@ public sealed partial class DetailPage : Page
     async void OnClearRecording(object _, RoutedEventArgs __)
     {
         var (vm, id) = (Vm, Vm.Row.Id);
-        if (!await App.ConfirmAsync(this, $"Clear the recording of {vm.Name}?",
-                "The recorded pipelines are removed. They're compiled again only if the game creates them again while recording, "
-                + "and the compile plan goes back to what the game's files give.\n\nThe recorder itself stays in; the game's files aren't touched.",
-                "Clear recording")) return;
+        if (!await App.ConfirmAsync(this, $"清理 {vm.Name} 的录制数据？",
+                "已录到的管线会被移除；只有在开启录制后由游戏再次创建时才能重新获得，编译计划会退回到游戏文件可提供的内容。"
+                + "\n\n录制器本身会保留，游戏自带文件不会被修改。",
+                "清理录制数据")) return;
         vm.ClearingRecording = true;
         vm.Refresh();
-        try { vm.Error = await Task.Run(() => App.Core.ClearRecording(id)) ? null : "Nothing was cleared: no recording of this game was found."; }
+        try { vm.Error = await Task.Run(() => App.Core.ClearRecording(id)) ? null : "未清理任何文件：没有找到此游戏的录制数据。"; }
         catch (Exception ex) { vm.Error = ex.Message; }
         vm.ClearingRecording = false;
         vm.Refresh();

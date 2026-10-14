@@ -56,14 +56,14 @@ public class UserAgentTests : IDisposable
         await new ActiveCheck(Path.Combine(_dir, "ac"), () => true, GpuVendor.Nvidia, AppVersion.Parse("1.2.4"), routes).SendAsync();
         _client = "content";   // known-stutter, engines, verdicts, welcome
         await routes.GetContentAsync("v1/content/x.json", TimeSpan.FromSeconds(5), 1024);
-        _client = "updates";   // the feed and Velopack's package downloads: GitHub (stable) and the package host pass through
+        _client = "updates";   // both stable and beta packages now come from this fork's GitHub Releases
         var feeds = new FeedClient(routes, new FeedTrust(new AppStore(Path.Combine(_dir, "u")), FeedTrust.ReleaseKeys), () => Task.FromResult<string?>("t"));
         await Assert.ThrowsAsync<HttpRequestException>(() => feeds.PackageAsync(AppVersion.Parse("1.2.5")!, "a.nupkg", default));
         await Assert.ThrowsAsync<HttpRequestException>(() => feeds.PackageAsync(AppVersion.Parse("1.3.0-beta.1")!, "b.nupkg", default));
 
         Assert.Equal(["account", "community", "sharing", "active check", "content", "updates"], _seen.Select(s => s.Client).Distinct());
-        Assert.Contains(_seen, s => s.Request.StartsWith("GET https://github.com/"));
-        Assert.Contains(_seen, s => s.Request.StartsWith("GET https://dl.scskiller.io/"));
+        Assert.Contains(_seen, s => s.Request.StartsWith("GET https://github.com/SAOG0721/SCSKiller-NoACGate-zh-CN/releases/download/v1.2.5/"));
+        Assert.Contains(_seen, s => s.Request.StartsWith("GET https://github.com/SAOG0721/SCSKiller-NoACGate-zh-CN/releases/download/v1.3.0-beta.1/"));
         Assert.All(_seen, s => Assert.Equal(Expected, s.Agent));
     }
 

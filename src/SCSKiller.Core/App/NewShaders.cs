@@ -14,8 +14,7 @@ public static class NewShaders
 
     /// <summary>A rebuilt plan's "can now compile N more" (ScsKiller.PlannerChanged): told once per compile, whatever the
     /// count and the day. Not yet rebuilt ("can now compile more of this game"), its count is the last plan's.</summary>
-    static bool PlannerChanged(GameState s) => s.Status == GameStatus.Stale && s.StatusReason.StartsWith("SCSKiller can now compile ", StringComparison.Ordinal)
-        && !s.StatusReason.StartsWith("SCSKiller can now compile more", StringComparison.Ordinal);
+    static bool PlannerChanged(GameState s) => s.Status == GameStatus.Stale && s.ReasonFlags.HasFlag(GameReasonFlags.PlannerExpanded);
 
     /// <summary>What a notification about the game says, as the notified store keeps it; null when there is nothing to tell.</summary>
     public static string? Key(GameState s, IReadOnlySet<string> driverStale) =>

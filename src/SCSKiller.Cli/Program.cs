@@ -8,37 +8,35 @@ using SCSKiller.Core.Unreal;
 using SCSKiller.Core.Vendors;
 
 const string Usage = """
-    usage: scskiller <command>
-      scan [--rescan]                             discover games and show their status (--rescan: redo engine detection)
-      status [game]                               all games, or one in detail
+    用法：scskiller <命令>
+      scan [--rescan]                             查找游戏并显示状态（--rescan：重新识别引擎）
+      status [game]                               显示全部游戏，或指定游戏的详细状态
       compile <game|--all-ready> [--threads N] [--idle | --when-idle] [--careful | --fast]
-                                                  --idle: background priority; --when-idle: also only while nobody uses the PC;
-                                                  --careful (AMD): this and later compiles of the game compile its recorded
-                                                  pipelines in passes on few threads, so the driver keeps more of them (slower);
-                                                  --fast: back to one pass
-      queue [command]                             debug shell for the compile queue: the command, then one per line on stdin:
+                                                  --idle：后台优先级；--when-idle：仅在电脑空闲时运行；
+                                                  --careful（AMD）：用较少线程分批编译录制的管线，速度较慢；
+                                                  --fast：恢复单轮快速编译
+      queue [command]                             编译队列调试命令；后续可从标准输入逐行发送：
                                                   list | add <game> | move <game> <index> | remove <game> | start | stop | wait | quit
-      rewarm-stale [--if-driver-changed]          what the scheduled task runs; follows the driver-update setting
+      rewarm-stale [--if-driver-changed]          计划任务使用；按驱动更新设置重新预热
       cache get | cache set <GB|unlimited|default>
-      cache clear <game> [--game-precache]        delete the game's shader caches: driver, Windows (D3DSCache) (asks first);
-                                                  --game-precache: also the caches the game writes itself (Unreal's user pipeline
-                                                  cache, *.ushaderprecache), which it rebuilds at its next start
-      nvidia-snapshot                             read-only: every global DRS setting, Auto Shader Compilation, its idle task
-      nvidia-auto-shader off|low|medium|high      switch NVIDIA's Auto Shader Compilation (admin, asks first)
-        (cache set / nvidia-auto-shader, as the app runs them elevated: --yes skips the question, --result <file>
-         writes the outcome as a JSON line, --for-user <SID> refuses a different account's elevation)
+      cache clear <game> [--game-precache]        清理驱动和 Windows 的着色器缓存（先确认）；
+                                                  --game-precache 还会清理游戏自己的预缓存
+      nvidia-snapshot                             只读查看 NVIDIA 全局 DRS、自动着色器编译和空闲任务
+      nvidia-auto-shader off|low|medium|high      设置 NVIDIA 自动着色器编译（需要管理员权限，先确认）
+        （cache set / nvidia-auto-shader：--yes 跳过普通设置确认；--result <file> 输出 JSON；
+         --for-user <SID> 限制提权操作的用户。反作弊录制许可始终单独确认。）
       record install|uninstall <game>
-      record clear <game>                         delete the game's recording (the recorder's data files and SCSKiller's copy; asks first)
-      record alongside <game> on|off              let the recorder chain to a mod's d3d12.dll (renamed, put back on removal)
-      key <game> <hex>                            give an encrypted game's AES key (verified, stored locally only)
-      index <game> --out <dir>                    debug: dump the engine reader's shader index
+      record anti-cheat <game> on|off              对检测到反作弊的游戏单独允许/撤销直接录制（开启前警告）
+      record clear <game>                         清理该游戏的录制数据（先确认）
+      record alongside <game> on|off              与已有 mod 的 d3d12.dll 串接录制
+      key <game> <hex>                            提供加密游戏的 AES 密钥（验证后只保存在本机）
+      index <game> --out <dir>                    调试：导出引擎读取器的着色器索引
       rehydrate <game> <hash-only.db> --out <db> [--expect <content hash>]
-                                                  add the shader bytes a hash-only recording references, from the install
-      reference export <game> [--out <file>]      the game build's shader list for the community server's `admin reference import`:
-                                                  the index's shaders and those this PC's recording saw (default <game id>.reference.json)
-      task register|unregister                    the logon/idle "re-warm after a driver update" task
-      fetch-codecs <dir>                          packaging: the pinned Oodle/zlib DLLs in <dir>, downloaded if missing
-    <game> is an id (steam:2909400) or a case-insensitive part of the name.
+                                                  从本机游戏文件补齐哈希录制引用的着色器字节
+      reference export <game> [--out <file>]      导出此版本游戏的着色器清单供社区服务器使用
+      task register|unregister                    注册或移除驱动更新后的登录/空闲预热任务
+      fetch-codecs <dir>                          打包用：获取固定版本的 Oodle/zlib DLL
+    <game> 可填写游戏 ID（如 steam:2909400）或不区分大小写的部分名称。
     """;
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;  // game names carry ™ and ®
@@ -48,7 +46,7 @@ if (args.Length == 0 || args[0] is "-h" or "--help" or "help") { Console.WriteLi
 // Packaging never reads the app's data folder.
 if (args[0] != "fetch-codecs" && Busy.Applying(AppStore.DefaultDir, DateTimeOffset.UtcNow))
 {
-    const string busy = "an update is being installed; try again in a minute";
+    const string busy = "正在安装更新，请稍后重试";
     Console.Error.WriteLine(busy);
     // run elevated by the app, the exit code alone (0, for the scheduled task) would read as done
     try { if (Opt(Elevated.ResultArg) is { } file) Elevated.WriteResult(file, false, busy); }
@@ -74,8 +72,8 @@ try
         "task" => TaskCommand(),
         "nvidia-snapshot" => NvidiaSnapshot(),
         "nvidia-auto-shader" => NvidiaAutoShader(),
-        "fetch-codecs" => FetchCodecs(args.ElementAtOrDefault(1) ?? throw new ArgumentException("usage: scskiller fetch-codecs <dir>")),
-        _ => Fail($"unknown command '{args[0]}'\n{Usage}"),
+        "fetch-codecs" => FetchCodecs(args.ElementAtOrDefault(1) ?? throw new ArgumentException("用法：scskiller fetch-codecs <dir>")),
+        _ => Fail($"未知命令“{args[0]}”\n{Usage}"),
     };
 }
 catch (Exception e)
@@ -91,7 +89,7 @@ return code;
 
 static int Fail(string message)
 {
-    Console.Error.WriteLine("error: " + message);
+    Console.Error.WriteLine("错误：" + message);
     Outcome.Message = message;
     return 1;
 }
@@ -99,12 +97,12 @@ static int Fail(string message)
 /// <summary>False (reported as an error) unless the answer is y.</summary>
 static bool Confirm(string question)
 {
-    Console.Write(question + " [y/N] ");
+    Console.Write(question + " [y/N，输入 y 确认] ");
     var piped = Console.IsInputRedirected;
     var answer = piped ? Elevated.ReadAnswer(Console.OpenStandardInput()) : Console.ReadLine()?.Trim();
     if (piped) Console.WriteLine(answer);
     if (string.Equals(answer, "y", StringComparison.OrdinalIgnoreCase)) return true;
-    Fail(answer == null ? "cancelled: no answer on stdin (pipe y to confirm)" : $"cancelled: the answer was '{answer}', not y");
+    Fail(answer == null ? "已取消：标准输入没有回答（可传入 y 确认）" : $"已取消：输入的是“{answer}”，不是 y");
     return false;
 }
 
@@ -127,7 +125,7 @@ static string StatusName(GameState s) => ScsKiller.NeedsOfflineSession(s) ? "Nee
 static string Hms(TimeSpan? t) => t?.ToString(@"h\:mm\:ss") ?? "-";
 
 static void Row(GameState s) =>
-    Console.WriteLine($"{StatusName(s),-19} {s.Game.Id,-24} {s.Game.Name}{(s.AntiCheat != AntiCheat.None ? $"  [{s.AntiCheat}]" : "")}{(s.KnownStutter is { } ks ? $"  [known stutter: {ks.Severity.ToString().ToLowerInvariant()}]" : "")}{(s.NoStutter != null ? "  [no shader stutter]" : "")}{(s.RecorderInstalled ? "  [recorder]" : "")}{(s.CacheOnDisk is { } c ? $"  [cache {Format.Bytes(c)}]" : "")}  - {(ScsKiller.NeverRecorded(s) ? $"{ScsKiller.NothingRecordedTitle}. {s.RecorderRefused}" : s.StatusReason)}");
+    Console.WriteLine($"{StatusName(s),-19} {s.Game.Id,-24} {s.Game.Name}{(s.AntiCheat != AntiCheat.None ? $"  [{s.AntiCheat}]" : "")}{(s.KnownStutter is { } ks ? $"  [已知卡顿：{ks.Severity.ToString().ToLowerInvariant()}]" : "")}{(s.NoStutter != null ? "  [无着色器卡顿]" : "")}{(s.RecorderInstalled ? "  [录制器已安装]" : "")}{(s.CacheOnDisk is { } c ? $"  [缓存 {Format.Bytes(c)}]" : "")}  - {(ScsKiller.NeverRecorded(s) ? $"游玩过但未录到数据。{s.RecorderRefused}" : s.StatusReason)}");
 
 /// <summary>The tags' <see cref="Format.Middleware"/> lines joined with " · ", with the DLL names when <paramref name="dlls"/>.</summary>
 static string MiddlewareLine(IReadOnlyList<MiddlewareTag> tags, bool dlls) => string.Join(" · ", tags.Select(t =>
@@ -142,8 +140,8 @@ static GameState Match(IReadOnlyList<GameState> games, string query)
     return many.Count switch
     {
         1 => many[0],
-        0 => throw new ArgumentException($"no game matches '{query}'"),
-        _ => throw new ArgumentException($"'{query}' matches several games: {string.Join(", ", many.Select(s => $"{s.Game.Name} ({s.Game.Id})"))}"),
+        0 => throw new ArgumentException($"没有匹配“{query}”的游戏"),
+        _ => throw new ArgumentException($"“{query}”匹配多个游戏：{string.Join("、", many.Select(s => $"{s.Game.Name} ({s.Game.Id})"))}"),
     };
 }
 
@@ -151,19 +149,19 @@ string? Opt(string name)
 {
     int i = Array.IndexOf(args, name);
     if (i < 0) return null;
-    return i + 1 < args.Length && !args[i + 1].StartsWith("--") ? args[i + 1] : throw new ArgumentException($"{name} needs a value");
+    return i + 1 < args.Length && !args[i + 1].StartsWith("--") ? args[i + 1] : throw new ArgumentException($"{name} 需要一个值");
 }
 
 /// <summary>Refuses an option the command doesn't take (a typo would otherwise run with the default).</summary>
 void Only(params string[] known)
 {
-    if (args.Skip(1).FirstOrDefault(a => a.StartsWith("--") && !known.Contains(a)) is { } unknown) throw new ArgumentException($"unknown option '{unknown}'");
+    if (args.Skip(1).FirstOrDefault(a => a.StartsWith("--") && !known.Contains(a)) is { } unknown) throw new ArgumentException($"未知选项“{unknown}”");
 }
 
 async Task<int> Scan(bool rescan)
 {
     var k = await Open(rescan);
-    Console.WriteLine($"GPU: {k.Vendor.Gpu.Name}, driver {k.Vendor.Gpu.DriverVersion} ({k.Vendor.Caps.Profile})");
+    Console.WriteLine($"显卡：{k.Vendor.Gpu.Name}，驱动 {k.Vendor.Gpu.DriverVersion}（{k.Vendor.Caps.Profile}）");
     foreach (var s in k.Games) Row(s);
     return 0;
 }
@@ -176,7 +174,7 @@ async Task<int> Status(string? query)
         foreach (var s in k.Games)
         {
             Row(s);
-            if (s.Middleware is { Count: > 0 } m) Console.WriteLine($"{"",15}middleware: {MiddlewareLine(m, false)}");
+            if (s.Middleware is { Count: > 0 } m) Console.WriteLine($"{"",15}中间件：{MiddlewareLine(m, false)}");
         }
         return 0;
     }
@@ -184,32 +182,32 @@ async Task<int> Status(string? query)
     var rec = k.Store.LoadGame(g.Game.Id);
     Console.WriteLine($"""
         {g.Game.Name} ({g.Game.Id}, {g.Game.Store})
-          install    {g.Game.InstallDir}
-          exe        {g.Game.ExePath}
-          runs as    {(rec.LaunchedExeName is { } l0 ? $"{l0} (seen {rec.LaunchedExeSeenAt:yyyy-MM-dd HH:mm})" : "not seen yet")}; warms stage {ScsKiller.WarmExeName(g.Game, rec)}
-          engine     {(g.Engine is { } e ? string.Join(' ', new[] { Format.Engine(e) + (e.VersionGuessed ? " (guessed)" : ""), e.Fork, e.GraphicsApi }.OfType<string>()) + (e.Encrypted ? " encrypted" : "") : "-")}
-          status     {StatusName(g)}: {g.StatusReason}
-          anti-cheat {g.AntiCheat}
-          shaders    {g.ShaderCount?.ToString() ?? "-"}
-          plan       {(g.Plan is { } p ? $"{p.Recorded} recorded + {p.Generated} generated + {p.D3D11Shaders} DirectX 11 shaders + {p.MiddlewareItems} middleware, {p.RootSignatures} root sigs, rule verified: {p.RootSigRuleVerified}" : "-")}
-          stutter    {(g.KnownStutter is { } st ? $"known, {st.Severity.ToString().ToLowerInvariant()}: {st.Reason} ({st.Source}, checked {st.Date})" : g.NoStutter is { } ns ? $"none: {ns}" : "-")}
-          middleware {(g.Middleware is { Count: > 0 } mw ? MiddlewareLine(mw, true) : "-")}
-          estimate   {(g.EstimatedCacheBytes is { } est ? Format.Bytes(est) : "-")} of cache, {Hms(g.EstimatedWarmTime)}
-          careful    {CarefulLine(g.Careful)}
-          warmed     {(g.WarmedAt is { } w ? $"{w:yyyy-MM-dd HH:mm} for driver {g.WarmedDriverVersion} in {Hms(g.LastWarmTime)}" + (ScsKiller.WarmCounts(g.LastWarmFailed ?? 0, g.LastWarmSkipped ?? 0, g.LastWarmCrashed ?? 0) is { } counts ? $"; {counts}" : "") : "never")}
-          cache      {(g.CacheOnDisk is { } c ? $"{Format.Bytes(c)} on disk (driver-cache files its warms or the game had open)" : "-")}
-          keys       {(rec.CacheKeys.Count > 0 ? string.Join(", ", rec.CacheKeys.Order()) : "-")}{(k.WarmAgs(g.Game.Id) is { } ags ? $" (compiles register its AGS app name {ags.App}, key {k.AgsKey(g.Game.Id)}: the exe name's case doesn't matter)" : AmdAppCache.IsNameHashed(rec.CacheKeys, ScsKiller.WarmExeName(g.Game, rec)) == false ? " (an app profile's key, not the exe name's hash: the name's case doesn't matter)" : "")}
-          recorder   {(g.RecorderInstalled ? "installed" : "not installed")}{(g.RecorderRefused is { } why ? $"; {(ScsKiller.NeverRecorded(g) ? ScsKiller.NothingRecordedTitle + ". " : "")}{why}" : "")}
-          recording  {(g.RecordingBytes > 0 ? $"{Format.Bytes(g.RecordingBytes)} (the game folder's files and SCSKiller's copy)" : "-")}, limit {ScsKiller.LimitText(k.Settings.RecordingLimitMB)} per game{(g.RecordingPaused ? $"; {ScsKiller.PausedNote(k.Settings)}" : "")}
-          last play  {(g.LastSession is { } l ? $"{Hms(l.Duration)}, {l.Requests} pipelines: {l.FromGameLibrary} from the game's library, {l.CacheHits} cache hits, {l.Compiles} compiles (worst {l.WorstCompileMs:0.0} ms){(l.StartupCompiles > 0 ? $", {l.StartupCompiles} compiles while the game started or loaded" : "")}{(l.RayQueryRecompiles > 0 ? $", {l.RayQueryRecompiles} ray-traced pipelines the driver partly recompiles every launch" : "")}{(l.StateObjectsReady + l.StateObjectsCompiled + l.StateObjectsStartupCompiled > 0 ? $"; ray tracing state objects: {l.StateObjectsReady} ready, {l.StateObjectsCompiled} compiled{(l.StateObjectsStartupCompiled > 0 ? $", {l.StateObjectsStartupCompiled} compiled while the game started or loaded" : "")}" : "")}" : "-")}
-          1st launch {(rec.FirstLaunch is { } fl ? $"{fl.At.LocalDateTime:yyyy-MM-dd HH:mm}, after the last compile: {fl.Hits} cache hits, {fl.Compiles} compiles ({fl.Compiled * 100:0.0}% compiled)" : "-")}
+          安装目录  {g.Game.InstallDir}
+          执行文件  {g.Game.ExePath}
+          实际进程  {(rec.LaunchedExeName is { } l0 ? $"{l0}（{rec.LaunchedExeSeenAt:yyyy-MM-dd HH:mm} 检测到）" : "尚未检测到")}；预热使用 {ScsKiller.WarmExeName(g.Game, rec)}
+          游戏引擎  {(g.Engine is { } e ? string.Join(' ', new[] { Format.Engine(e) + (e.VersionGuessed ? "（推测）" : ""), e.Fork, e.GraphicsApi }.OfType<string>()) + (e.Encrypted ? "，文件已加密" : "") : "-")}
+          当前状态  {StatusName(g)}：{g.StatusReason}
+          反作弊    {g.AntiCheat}
+          着色器数  {g.ShaderCount?.ToString() ?? "-"}
+          编译计划  {(g.Plan is { } p ? $"录制 {p.Recorded} + 生成 {p.Generated} + DirectX 11 着色器 {p.D3D11Shaders} + 中间件 {p.MiddlewareItems}；根签名 {p.RootSignatures}，规则已验证：{p.RootSigRuleVerified}" : "-")}
+          卡顿记录  {(g.KnownStutter is { } st ? $"已知卡顿（{st.Severity.ToString().ToLowerInvariant()}）：{st.Reason}（{st.Source}，核查于 {st.Date}）" : g.NoStutter is { } ns ? $"无着色器卡顿：{ns}" : "-")}
+          中间件    {(g.Middleware is { Count: > 0 } mw ? MiddlewareLine(mw, true) : "-")}
+          预计占用  {(g.EstimatedCacheBytes is { } est ? Format.Bytes(est) : "-")} 缓存；预计耗时 {Hms(g.EstimatedWarmTime)}
+          谨慎模式  {CarefulLine(g.Careful)}
+          上次预热  {(g.WarmedAt is { } w ? $"{w:yyyy-MM-dd HH:mm}，驱动 {g.WarmedDriverVersion}，耗时 {Hms(g.LastWarmTime)}" + (ScsKiller.WarmCounts(g.LastWarmFailed ?? 0, g.LastWarmSkipped ?? 0, g.LastWarmCrashed ?? 0) is { } counts ? $"；{counts}" : "") : "从未预热")}
+          驱动缓存  {(g.CacheOnDisk is { } c ? $"磁盘上 {Format.Bytes(c)}（预热或游戏打开过的驱动缓存文件）" : "-")}
+          缓存键    {(rec.CacheKeys.Count > 0 ? string.Join(", ", rec.CacheKeys.Order()) : "-")}{(k.WarmAgs(g.Game.Id) is { } ags ? $"（编译时注册 AGS 程序名 {ags.App}，键 {k.AgsKey(g.Game.Id)}；执行文件名大小写不影响结果）" : AmdAppCache.IsNameHashed(rec.CacheKeys, ScsKiller.WarmExeName(g.Game, rec)) == false ? "（应用配置键，不是执行文件名哈希；名称大小写不影响结果）" : "")}
+          录制器    {(g.RecorderInstalled ? "已安装" : "未安装")}{(g.RecorderRefused is { } why ? $"；{(ScsKiller.NeverRecorded(g) ? "游玩过但未录到数据。" : "")}{why}" : "")}
+          录制数据  {(g.RecordingBytes > 0 ? $"{Format.Bytes(g.RecordingBytes)}（游戏目录文件及 SCSKiller 副本）" : "-")}；每个游戏上限 {ScsKiller.LimitText(k.Settings.RecordingLimitMB)}{(g.RecordingPaused ? $"；{ScsKiller.PausedNote(k.Settings)}" : "")}
+          上次游玩  {(g.LastSession is { } l ? $"{Hms(l.Duration)}，共 {l.Requests} 条管线：游戏自带库 {l.FromGameLibrary}、缓存命中 {l.CacheHits}、游玩时编译 {l.Compiles}（最长 {l.WorstCompileMs:0.0} 毫秒）{(l.StartupCompiles > 0 ? $"，启动或加载时编译 {l.StartupCompiles}" : "")}{(l.RayQueryRecompiles > 0 ? $"，每次启动仍需部分重编的光追管线 {l.RayQueryRecompiles}" : "")}{(l.StateObjectsReady + l.StateObjectsCompiled + l.StateObjectsStartupCompiled > 0 ? $"；光追状态对象：已就绪 {l.StateObjectsReady}、游玩时编译 {l.StateObjectsCompiled}{(l.StateObjectsStartupCompiled > 0 ? $"、启动或加载时编译 {l.StateObjectsStartupCompiled}" : "")}" : "")}" : "-")}
+          首次启动  {(rec.FirstLaunch is { } fl ? $"{fl.At.LocalDateTime:yyyy-MM-dd HH:mm}；上次编译后缓存命中 {fl.Hits}，仍编译 {fl.Compiles}（已覆盖 {fl.Compiled * 100:0.0}%）" : "-")}
         """);
     return 0;
 }
 
-static string CarefulLine(CarefulCompile? c) => c is not { } x ? "- (AMD only)"
-    : (x.On ? $"on: the recorded pipelines compile in passes on at most {ScsKiller.AmdCarefulThreads} threads, the rest at full speed" : "off (compile <game> --careful turns it on)")
-      + (x.Recorded == 0 ? "; no recording yet, so nothing compiles carefully" : x.Estimate is { } t ? $"; a careful compile takes about {ScsKiller.Duration(t)}" : "");
+static string CarefulLine(CarefulCompile? c) => c is not { } x ? "-（仅 AMD）"
+    : (x.On ? $"开启：录制的管线最多用 {ScsKiller.AmdCarefulThreads} 个线程分批编译，其余保持全速" : "关闭（使用 compile <game> --careful 开启）")
+      + (x.Recorded == 0 ? "；尚无录制数据，暂无可分批编译的管线" : x.Estimate is { } t ? $"；预计耗时约 {ScsKiller.Duration(t)}" : "");
 
 static void PrintQueueChanges(ScsKiller k)
 {
@@ -230,20 +228,20 @@ static void PrintQueueChanges(ScsKiller k)
 
 async Task<int> RunQueue(ScsKiller k, IReadOnlyList<GameState> targets, bool whenIdle = false)
 {
-    if (targets.Count == 0) { Console.WriteLine("nothing to compile"); return 0; }
+    if (targets.Count == 0) { Console.WriteLine("没有需要编译的游戏"); return 0; }
     PrintQueueChanges(k);
     bool cancelled = false;
     Console.CancelKeyPress += (_, e) =>
     {
         e.Cancel = true;
         cancelled = true;
-        Console.WriteLine("stopping (in-flight compiles finish so the driver writes its cache)...");
+        Console.WriteLine("正在停止；进行中的编译会完成，以便驱动写入缓存…");
         foreach (var q in k.Queue.Where(q => q.Stage == QueueStage.Waiting)) k.Remove(q.GameId);
         k.StopQueue();
     };
     foreach (var t in targets)
         if (whenIdle) k.EnqueueWhenIdle(t.Game.Id); else k.Enqueue(t.Game.Id);
-    if (whenIdle) Console.WriteLine($"waiting until the PC has been idle for {k.IdleAfter.TotalMinutes:0} min (pauses on input)");
+    if (whenIdle) Console.WriteLine($"等待电脑空闲 {k.IdleAfter.TotalMinutes:0} 分钟；有输入时暂停");
     else k.StartQueue();
     await k.WhenQueueIdle();
     return !cancelled && k.Queue.Count > 0 && k.Queue.All(q => q.Stage == QueueStage.Done) ? 0 : 1;   // Ctrl+C: not everything compiled
@@ -269,7 +267,7 @@ async Task<int> QueueShell()
                     var queue = all.Where(q => !q.PlanCheck).ToList();
                     for (int i = 0; i < queue.Count; i++)
                         Console.WriteLine($"{i,3} {queue[i].Stage,-13} {queue[i].GameId}{(queue[i].Note is { } n ? "  (" + n + ")" : "")}");
-                    Console.WriteLine(k.QueueRunning ? "queue running" : "queue not running");
+                    Console.WriteLine(k.QueueRunning ? "队列运行中" : "队列未运行");
                     if (ScsKiller.PlanCheckLine(all) is { } checks) Console.WriteLine(checks);
                     break;
                 case "add" when w.Length > 1: k.Enqueue(Id(w, 1, w.Length)); break;
@@ -279,10 +277,10 @@ async Task<int> QueueShell()
                 case "stop": k.StopQueue(); break;
                 case "wait": await k.WhenQueueIdle(); break;
                 case "quit": k.StopQueue(); await k.WhenQueueIdle(); return 0;   // graceful: the driver writes its cache
-                default: Console.WriteLine("list | add <game> | move <game> <index> | remove <game> | start | stop | wait | quit"); break;
+                default: Console.WriteLine("可用命令：list | add <game> | move <game> <index> | remove <game> | start | stop | wait | quit"); break;
             }
         }
-        catch (ArgumentException e) { Console.WriteLine("error: " + e.Message); }
+        catch (ArgumentException e) { Console.WriteLine("错误：" + e.Message); }
     }
     await k.WhenQueueIdle();   // end of input: let a started queue finish
     return 0;
@@ -301,19 +299,19 @@ async Task<int> CacheClear()
     var precache = args.Contains("--game-precache");
     var parts = k.GameCaches(g.Game.Id, precache);
     var gap = k.DriverCacheGap(g.Game.Id);
-    if (parts.Count == 0) return Fail($"no shader-cache files of {g.Game.Name} were found" + (gap != null ? $" ({gap})" : ""));
+    if (parts.Count == 0) return Fail($"未找到 {g.Game.Name} 的着色器缓存文件" + (gap != null ? $"（{gap}）" : ""));
     foreach (var p in parts)
     {
         Console.WriteLine($"{p.Name}  {Format.Bytes(p.Bytes)}");
         foreach (var f in p.Files) Console.WriteLine($"  {f}");
     }
-    if (gap != null) Console.WriteLine($"note: {gap}");
+    if (gap != null) Console.WriteLine($"提示：{gap}");
     if (!precache && k.GameCaches(g.Game.Id, true).Where(p => p.Name is ScsKiller.PipelinePart or ScsKiller.PrecachePart).ToList() is { Count: > 0 } own)
-        Console.WriteLine($"kept: the game's own caches ({string.Join(", ", own.Select(p => $"{p.Name} {Format.Bytes(p.Bytes)}"))}); --game-precache deletes them too");
-    if (!Confirm($"Delete {g.Game.Name}'s shader caches ({string.Join(", ", parts.Select(p => $"{p.Name} {Format.Bytes(p.Bytes)}"))}, the files above)? " +
-                 "Its next run is cold; it shows as not warmed afterwards.")) return 1;
+        Console.WriteLine($"已保留游戏自己的缓存（{string.Join("、", own.Select(p => $"{p.Name} {Format.Bytes(p.Bytes)}"))}）；加入 --game-precache 才会清理");
+    if (!Confirm($"删除上面列出的 {g.Game.Name} 着色器缓存（{string.Join("、", parts.Select(p => $"{p.Name} {Format.Bytes(p.Bytes)}"))}）？"
+                 + "下次启动需重新生成缓存，状态会变成未预热。")) return 1;
     k.ClearGameCache(g.Game.Id, precache);   // a refusal throws InvalidOperationException: printed as "error: <reason>"
-    Console.WriteLine($"cleared {g.Game.Name}'s shader caches");
+    Console.WriteLine($"已清理 {g.Game.Name} 的着色器缓存");
     return 0;
 }
 
@@ -321,7 +319,7 @@ async Task<int> Compile()
 {
     if (args.Length < 2) return Fail("compile <game|--all-ready> [--threads N] [--idle | --when-idle] [--careful | --fast]");
     Only("--all-ready", "--threads", "--idle", "--when-idle", "--careful", "--fast");
-    int? threads = Opt("--threads") is { } t ? int.TryParse(t, out var n) && n > 0 ? n : throw new ArgumentException("--threads takes a number of threads") : null;
+    int? threads = Opt("--threads") is { } t ? int.TryParse(t, out var n) && n > 0 ? n : throw new ArgumentException("--threads 需要正整数线程数") : null;
     var k = await Open();
     if (threads != null) k.ThreadsOverride = threads;
     bool whenIdle = args.Contains("--when-idle");
@@ -330,7 +328,7 @@ async Task<int> Compile()
     var targets = args[1] == "--all-ready"
         ? k.Games.Where(s => s.Status is GameStatus.Ready or GameStatus.Stale && s.NoStutter == null && !s.CompileUnreached).ToList()
         : [Match(k.Games, args[1])];
-    if (targets is [{ StatusReason: ScsKiller.CantReachReason } refused]) return Fail($"{refused.Game.Name}: {refused.StatusReason}");
+    if (targets is [{ ReasonFlags: var flags } refused] && flags.HasFlag(GameReasonFlags.CacheUnreachable)) return Fail($"{refused.Game.Name}: {refused.StatusReason}");
     if (args.Contains("--careful") || args.Contains("--fast"))
         foreach (var g in targets)
         {
@@ -344,23 +342,23 @@ async Task<int> RewarmStale(bool ifDriverChanged)
 {
     var k = await Open();
     var stale = ifDriverChanged ? k.DriverStaleGames() : k.StaleGames();
-    if (stale.Count == 0) { Console.WriteLine("nothing to re-warm"); return 0; }
+    if (stale.Count == 0) { Console.WriteLine("没有需要重新预热的游戏"); return 0; }
     switch (k.Settings.OnDriverUpdate)
     {
         case DriverUpdateMode.Off:
-            Console.WriteLine($"{stale.Count} game(s) need a re-warm; automatic re-warm is off.");
+            Console.WriteLine($"{stale.Count} 个游戏需要重新预热；自动预热已关闭。");
             return 0;
         case DriverUpdateMode.Ask:
-            if (!k.ShouldNotifyStale()) { Console.WriteLine($"{stale.Count} game(s) need a re-warm; the user skipped them for this driver."); return 0; }
+            if (!k.ShouldNotifyStale()) { Console.WriteLine($"{stale.Count} 个游戏需要重新预热；用户已对当前驱动选择跳过。"); return 0; }
             if (ScheduledTask.AppExe() is { } app)   // the app shows the notification (compile now / when idle / skip)
             {
                 Process.Start(new ProcessStartInfo(app, ScheduledTask.DriverUpdatedArg) { UseShellExecute = false })?.Dispose();
-                Console.WriteLine($"{stale.Count} game(s) need a re-warm: notified via {app}");
+                Console.WriteLine($"{stale.Count} 个游戏需要重新预热；已通过 {app} 通知用户");
                 return 0;
             }
-            Console.WriteLine($"{stale.Count} game(s) need a re-warm (driver {k.Vendor.Gpu.DriverVersion}):");
+            Console.WriteLine($"{stale.Count} 个游戏需要重新预热（驱动 {k.Vendor.Gpu.DriverVersion}）：");
             foreach (var s in stale) Row(s);
-            Console.WriteLine("Run 'scskiller compile <game>' or open SCSKiller to re-warm them.");
+            Console.WriteLine("运行 scskiller compile <game> 或打开 SCSKiller 重新预热。");
             return 0;
         default:
             BackgroundPriority();
@@ -371,36 +369,36 @@ async Task<int> RewarmStale(bool ifDriverChanged)
 int Cache()
 {
     var v = GpuBackends.Detect();
-    Console.WriteLine($"GPU: {v.Gpu.Name} ({v.Vendor}), driver {v.Gpu.DriverVersion}, profile {v.Caps.Profile}");
+    Console.WriteLine($"显卡：{v.Gpu.Name}（{v.Vendor}），驱动 {v.Gpu.DriverVersion}，配置 {v.Caps.Profile}");
     if (args.Length > 1 && args[1] == "set")
     {
         if (args.Length < 3) return Fail("cache set <GB|unlimited|default>");
-        if (!v.Caps.CacheSizeConfigurable) return Fail("this GPU's cache size is not configurable");
+        if (!v.Caps.CacheSizeConfigurable) return Fail("此显卡的缓存上限不可调整");
         var limit = args[2].ToLowerInvariant() switch
         {
             "default" => new CacheLimit(null, true),
             "unlimited" => new CacheLimit(null, false),
             var n when double.TryParse(n, System.Globalization.CultureInfo.InvariantCulture, out var gb) && gb > 0 => new CacheLimit((long)(gb * 1073741824), false),
-            _ => throw new ArgumentException("size must be a number of GB, 'unlimited' or 'default'"),
+            _ => throw new ArgumentException("容量必须是 GB 数值、unlimited 或 default"),
         };
-        if (!Elevated.IsAdmin) return Fail("changing the driver's shader cache size needs an elevated (administrator) prompt");
-        var what = limit.IsDriverDefault ? "the driver default" : limit.Bytes == null ? "unlimited" : Format.Bytes(limit.Bytes);
-        if (!args.Contains(Elevated.YesArg) && !Confirm($"Set the global NVIDIA shader cache size to {what}? This changes a driver setting for every game."))
+        if (!Elevated.IsAdmin) return Fail("调整驱动着色器缓存上限需要管理员权限");
+        var what = limit.IsDriverDefault ? "驱动默认值" : limit.Bytes == null ? "无限制" : Format.Bytes(limit.Bytes);
+        if (!args.Contains(Elevated.YesArg) && !Confirm($"将 NVIDIA 全局着色器缓存上限设为 {what}？此驱动设置会影响所有游戏。"))
             return 1;
         v.SetCacheLimit(limit);
-        Outcome.Message = $"Shader cache limit set to {what}.";
+        Outcome.Message = $"着色器缓存上限已设为 {what}。";
     }
     var usage = v.GetCacheUsage();
     if (v is AmdBackend)   // GetCacheUsage sums both folders
-        Console.WriteLine($"cache: {(usage.UpperBound ? "<= " : "")}{Format.Bytes(usage.BytesOnDisk)} on disk = {AmdBackend.CacheDir} {Format.Bytes(AmdBackend.Bytes(AmdBackend.CacheDir))} (D3D12)" +
+        Console.WriteLine($"缓存：磁盘占用 {(usage.UpperBound ? "<= " : "")}{Format.Bytes(usage.BytesOnDisk)} = {AmdBackend.CacheDir} {Format.Bytes(AmdBackend.Bytes(AmdBackend.CacheDir))} (D3D12)" +
                           $" + {AmdBackend.D3D11CacheDir} {Format.Bytes(AmdBackend.Bytes(AmdBackend.D3D11CacheDir))} (D3D11)");
-    else Console.WriteLine($"cache: {usage.Path} {(usage.UpperBound ? "<= " : "")}{Format.Bytes(usage.BytesOnDisk)} on disk");
+    else Console.WriteLine($"缓存：{usage.Path}，磁盘占用 {(usage.UpperBound ? "<= " : "")}{Format.Bytes(usage.BytesOnDisk)}");
     var l =v.GetCacheLimit();
-    Console.WriteLine($"limit: {(l == null ? "not readable" : l.Bytes == null ? "unlimited" : Format.Bytes(l.Bytes))}{(l?.IsDriverDefault == true ? " (driver default)" : "")}");
+    Console.WriteLine($"上限：{(l == null ? "无法读取" : l.Bytes == null ? "无限制" : Format.Bytes(l.Bytes))}{(l?.IsDriverDefault == true ? "（驱动默认值）" : "")}");
     if (v is NvidiaBackend nv)
     {
         var (id, raw, def) = nv.ReadCacheSetting();
-        Console.WriteLine($"       setting 0x{id:X8} '{NvidiaBackend.CacheSizeSettingName}' = {(raw is { } r ? $"0x{r:X8}" : "not set")}, driver default 0x{def:X8}");
+        Console.WriteLine($"       设置 0x{id:X8} '{NvidiaBackend.CacheSizeSettingName}' = {(raw is { } r ? $"0x{r:X8}" : "未设置")}，驱动默认值 0x{def:X8}");
     }
     return 0;
 }
@@ -408,17 +406,30 @@ int Cache()
 async Task<int> Record()
 {
     bool alongside = args.Length > 3 && args[1] == "alongside" && args[3] is "on" or "off";
-    if (!alongside && (args.Length < 3 || args[1] is not ("install" or "uninstall" or "clear")))
-        return Fail("record install|uninstall|clear <game> | record alongside <game> on|off");
+    bool antiCheat = args.Length > 3 && args[1] == "anti-cheat" && args[3] is "on" or "off";
+    if (!alongside && !antiCheat && (args.Length < 3 || args[1] is not ("install" or "uninstall" or "clear")))
+        return Fail("用法：record install|uninstall|clear <game> | record alongside|anti-cheat <game> on|off");
     var k = await Open();
     var g = Match(k.Games, args[2]);
+    if (antiCheat)
+    {
+        bool on = args[3] == "on";
+        if (on && g.AntiCheat == AntiCheat.None) return Fail($"{g.Game.Name} 当前未检测到反作弊；普通录制请使用 record install");
+        if (on && !Confirm($"检测到 {g.AntiCheat}。直接录制会在游戏目录放入 d3d12.dll；游戏可能拒绝运行、判定篡改或封禁账号。"
+            + "此选项只解除 SCSKiller 自身的门禁，不会关闭或绕过游戏反作弊。仍要开启吗？")) return 1;
+        k.SetAntiCheatRecording(g.Game.Id, on);
+        var state = k.Games.Single(s => s.Game.Id == g.Game.Id);
+        Console.WriteLine($"{g.Game.Name}：反作弊直接录制许可已{(on ? "开启" : "关闭")}；录制器{(state.RecorderInstalled ? "已安装" : "未安装")}" +
+            (state.RecorderSkip is { } skip ? $"；原因：{skip}" : state.RecorderNote is { } note ? $"；状态：{note}" : ""));
+        return 0;
+    }
     if (args[1] == "clear")
     {
-        if (g.RecordingBytes == 0) return Fail($"{g.Game.Name} has no recording");
-        if (!Confirm($"Delete {g.Game.Name}'s recording ({Format.Bytes(g.RecordingBytes)})? The recorded pipelines are removed; they're compiled again only if " +
-                     "the game creates them again while recording, and the compile plan goes back to what the game's files give.")) return 1;
+        if (g.RecordingBytes == 0) return Fail($"{g.Game.Name} 没有录制数据");
+        if (!Confirm($"删除 {g.Game.Name} 的录制数据（{Format.Bytes(g.RecordingBytes)}）？已录到的管线会被移除；"
+                     + "只有开启录制并再次由游戏创建时才能重新获得，编译计划会退回到游戏文件可提供的内容。")) return 1;
         k.ClearRecording(g.Game.Id);   // a refusal throws InvalidOperationException: printed as "error: <reason>"
-        Console.WriteLine($"cleared {g.Game.Name}'s recording");
+        Console.WriteLine($"已清理 {g.Game.Name} 的录制数据");
         return 0;
     }
     if (alongside)
@@ -426,12 +437,12 @@ async Task<int> Record()
         var mod = k.RecorderMod(g.Game.Id);
         k.SetRecordAlongsideMod(g.Game.Id, args[3] == "on");
         var s = k.Games.Single(x => x.Game.Id == g.Game.Id);
-        Console.WriteLine($"record alongside {mod ?? "a mod"}: {args[3]}; recorder {(s.RecorderInstalled ? "installed" : "not installed")}"
+        Console.WriteLine($"与 {mod ?? "mod"} 串接录制：{args[3]}；录制器{(s.RecorderInstalled ? "已安装" : "未安装")}"
             + ((s.RecorderSkip == ScsKiller.SkipModNotChainable ? ScsKiller.NotChainableReason(s.RecorderMod) : s.RecorderSkip ?? s.RecorderNote) is { } why ? $" ({why})" : ""));
         return 0;
     }
     if (args[1] == "install") k.InstallRecorder(g.Game.Id); else k.UninstallRecorder(g.Game.Id);
-    Console.WriteLine($"recorder {args[1]}ed: {Path.GetDirectoryName(g.Game.ExePath)}");
+    Console.WriteLine($"录制器已{(args[1] == "install" ? "安装" : "卸载")}：{Path.GetDirectoryName(g.Game.ExePath)}");
     return 0;
 }
 
@@ -440,9 +451,9 @@ async Task<int> Key()
     if (args.Length < 3) return Fail("key <game> <hex>");
     var k = await Open();
     var g = Match(k.Games, args[1]);
-    if (!k.SetEncryptionKey(g.Game.Id, args[2])) return Fail($"that key doesn't open {g.Game.Name}'s files");
+    if (!k.SetEncryptionKey(g.Game.Id, args[2])) return Fail($"此密钥无法打开 {g.Game.Name} 的文件");
     await k.RescanAsync(CancellationToken.None);
-    Console.WriteLine($"key accepted for {g.Game.Name}: {k.Games.First(s => s.Game.Id == g.Game.Id).StatusReason}");
+    Console.WriteLine($"已接受 {g.Game.Name} 的密钥：{k.Games.First(s => s.Game.Id == g.Game.Id).StatusReason}");
     return 0;
 }
 
@@ -451,7 +462,7 @@ static async Task<(ScsKiller K, GameState G, IEngineReader Reader, EngineInfo En
     var k = await Open();
     var g = Match(k.Games, query);
     var reader = ScsKiller.DefaultReaders();
-    var engine = g.Engine ?? reader.Detect(g.Game) ?? throw new InvalidOperationException($"{g.Game.Name}: engine not supported");
+    var engine = g.Engine ?? reader.Detect(g.Game) ?? throw new InvalidOperationException($"{g.Game.Name}：不支持此引擎");
     return (k, g, reader, engine, reader.Index(g.Game, engine, log, CancellationToken.None));
 }
 
@@ -461,7 +472,7 @@ async Task<int> Index()
     var (_, _, _, engine, index) = await OpenIndex(args[1], new Progress<string>(Console.WriteLine));
     Directory.CreateDirectory(outDir);
     await File.WriteAllTextAsync(Path.Combine(outDir, "index.json"), JsonSerializer.Serialize(new { engine, index }, AppStore.Json));
-    Console.WriteLine($"{index.Shaders.Count} shaders, {index.Maps.Count} shader maps, content hash {index.ContentHash} -> {outDir}");
+    Console.WriteLine($"{index.Shaders.Count} 个着色器、{index.Maps.Count} 个着色器映射；内容哈希 {index.ContentHash} -> {outDir}");
     return 0;
 }
 
@@ -469,12 +480,12 @@ async Task<int> RehydrateCommand()
 {
     if (args.Length < 3 || Opt("--out") is not { } outDb) return Fail("rehydrate <game> <hash-only.db> --out <db> [--expect <content hash>]");
     var (_, g, reader, engine, index) = await OpenIndex(args[1]);
-    Console.WriteLine($"index content hash {index.ContentHash}");
+    Console.WriteLine($"索引内容哈希 {index.ContentHash}");
     var r = SCSKiller.Core.Planning.Rehydrate.Run(args[2], outDb, g.Game, engine, reader, index, Opt("--expect"),
         moreBlobs: h => SCSKiller.Core.Planning.Middleware.Blobs(g.Game, h));
-    Console.WriteLine($"referenced {r.Referenced}, already in db {r.AlreadyPresent}, found {r.Found} ({r.FoundInMiddleware} in middleware DLLs), missing {r.Missing.Count}" +
-        (r.ContentHashMatches is { } m ? $", content hash {(m ? "matches" : "DIFFERS")}" : "") + $" -> {outDb} ({r.OutputBytes:N0} bytes)");
-    foreach (var h in r.Missing) Console.WriteLine($"  missing {h}");
+    Console.WriteLine($"引用 {r.Referenced}、数据库中已有 {r.AlreadyPresent}、找到 {r.Found}（中间件 DLL 中 {r.FoundInMiddleware}）、缺失 {r.Missing.Count}" +
+        (r.ContentHashMatches is { } m ? $"，内容哈希{(m ? "匹配" : "不匹配")}" : "") + $" -> {outDb}（{r.OutputBytes:N0} 字节）");
+    foreach (var h in r.Missing) Console.WriteLine($"  缺失 {h}");
     return r.Complete ? 0 : 2;
 }
 
@@ -496,20 +507,20 @@ async Task<int> ReferenceExport()
         store_build_key = g.Game.Version is { } v ? $"{g.Game.Id}@{v}" : null,
         shaders,
     }));
-    Console.WriteLine($"{shaders.Length} shaders ({index.Shaders.Count} indexed), content hash {index.ContentHash} -> {outFile}");
+    Console.WriteLine($"{shaders.Length} 个着色器（索引中 {index.Shaders.Count} 个），内容哈希 {index.ContentHash} -> {outFile}");
     return 0;
 }
 
 // Read-only. Run it before and after switching something in the NVIDIA App and diff the two outputs.
 static int NvidiaSnapshot()
 {
-    if (GpuBackends.Detect() is not NvidiaBackend nv) return Fail("no NVIDIA GPU");
-    Console.WriteLine($"driver {nv.Gpu.DriverVersion}");
-    Console.WriteLine($"Auto Shader Compilation: {nv.GetAutoShaderCompilation()?.ToString() ?? "not readable"} (setting 0x{NvidiaBackend.AutoShaderCompilationId:X8})");
-    Console.WriteLine($"NvOSC.exe: {NvidiaBackend.NvOscPath() ?? "not found"}");
-    Console.WriteLine("base profile:");
+    if (GpuBackends.Detect() is not NvidiaBackend nv) return Fail("未检测到 NVIDIA 显卡");
+    Console.WriteLine($"驱动 {nv.Gpu.DriverVersion}");
+    Console.WriteLine($"自动着色器编译：{nv.GetAutoShaderCompilation()?.ToString() ?? "无法读取"}（设置 0x{NvidiaBackend.AutoShaderCompilationId:X8}）");
+    Console.WriteLine($"NvOSC.exe：{NvidiaBackend.NvOscPath() ?? "未找到"}");
+    Console.WriteLine("基础配置：");
     foreach (var (id, name, type, value) in NvidiaBackend.BaseProfileSettings())
-        Console.WriteLine($"  0x{id:X8} type {type} = 0x{value:X8}  {name}");
+        Console.WriteLine($"  0x{id:X8} 类型 {type} = 0x{value:X8}  {name}");
     foreach (var task in new[] { $@"\Users\{Environment.UserName}{NvidiaBackend.AutoShaderTaskName}", NvidiaBackend.AutoShaderTaskName })
     {
         var psi = new ProcessStartInfo("schtasks.exe", ["/Query", "/TN", task, "/V", "/FO", "LIST"]) { RedirectStandardOutput = true, RedirectStandardError = true };
@@ -517,9 +528,9 @@ static int NvidiaSnapshot()
         var output = p.StandardOutput.ReadToEnd();
         p.StandardError.ReadToEnd();
         p.WaitForExit();
-        Console.WriteLine($"task {task}: " + (p.ExitCode == 0 ? output.Trim() : "not registered"));
+        Console.WriteLine($"任务 {task}：" + (p.ExitCode == 0 ? output.Trim() : "未注册"));
     }
-    Console.WriteLine($"NvOSC.exe running: {Process.GetProcessesByName("NvOSC").Length > 0}");
+    Console.WriteLine($"NvOSC.exe 正在运行：{Process.GetProcessesByName("NvOSC").Length > 0}");
     return 0;
 }
 
@@ -528,18 +539,18 @@ int NvidiaAutoShader()
 {
     if (!Enum.TryParse<AutoShaderCompilation>(args.ElementAtOrDefault(1), true, out var level) || !Enum.IsDefined(level) || int.TryParse(args[1], out _))
         return Fail("nvidia-auto-shader off|low|medium|high");
-    if (GpuBackends.Detect() is not NvidiaBackend nv) return Fail("no NVIDIA GPU");
-    if (!Elevated.IsAdmin) return Fail("switching NVIDIA Auto Shader Compilation needs an elevated (administrator) prompt");
+    if (GpuBackends.Detect() is not NvidiaBackend nv) return Fail("未检测到 NVIDIA 显卡");
+    if (!Elevated.IsAdmin) return Fail("调整 NVIDIA 自动着色器编译需要管理员权限");
     // NvOSC.exe -register registers the idle task for the account running it: refuse when UAC elevated a different
     // administrator (over-the-shoulder), whose DXCache it would compile into. Same account + elevated token is fine.
     if (Opt(Elevated.ForUserArg) is { } sid && sid != Elevated.CurrentUserSid)
-        return Fail($"Windows elevated as a different account ({WindowsIdentity.GetCurrent().Name}), so the NVIDIA task would compile for that account, " +
-                    "not for you. Sign in to Windows with an administrator account, or ask an administrator to add yours to Administrators.");
-    if (!args.Contains(Elevated.YesArg) && !Confirm($"Set NVIDIA Auto Shader Compilation to {level}? This changes a global driver setting and the driver's idle task."))
+        return Fail($"Windows 使用其他账号（{WindowsIdentity.GetCurrent().Name}）提权，NVIDIA 任务会为该账号编译。"
+                    + "请使用管理员账号登录 Windows，或请管理员为当前账号授予管理员权限。");
+    if (!args.Contains(Elevated.YesArg) && !Confirm($"将 NVIDIA 自动着色器编译设为 {level}？这会修改全局驱动设置及空闲任务。"))
         return 1;
     nv.SetAutoShaderCompilation(level);
-    Console.WriteLine($"now: {nv.GetAutoShaderCompilation()?.ToString() ?? "not readable"}");
-    Outcome.Message = level == AutoShaderCompilation.Off ? "Auto Shader Compilation turned off." : $"Auto Shader Compilation turned on ({level}).";
+    Console.WriteLine($"当前：{nv.GetAutoShaderCompilation()?.ToString() ?? "无法读取"}");
+    Outcome.Message = level == AutoShaderCompilation.Off ? "已关闭自动着色器编译。" : $"已开启自动着色器编译（{level}）。";
     return 0;
 }
 
@@ -549,11 +560,11 @@ int TaskCommand()
     {
         case "register":
             ScheduledTask.Register(ScheduledTask.TaskExe() ?? Environment.ProcessPath!);
-            Console.WriteLine($"registered task {ScheduledTask.Name}");
+            Console.WriteLine($"已注册任务 {ScheduledTask.Name}");
             return 0;
         case "unregister":
             ScheduledTask.Unregister();
-            Console.WriteLine($"removed task {ScheduledTask.Name}");
+            Console.WriteLine($"已移除任务 {ScheduledTask.Name}");
             return 0;
         default:
             return Fail("task register|unregister");

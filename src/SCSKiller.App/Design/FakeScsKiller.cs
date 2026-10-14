@@ -89,6 +89,7 @@ public sealed class FakeScsKiller : IScsKiller
             {
                 WarmedDriverVersion = "610.88", WarmedAt = DateTimeOffset.Now.AddDays(-1).AddHours(-3), LastWarmTime = TimeSpan.FromSeconds(204), CacheOnDisk = 2_310_000_000,
                 LastWarmFailed = 0, LastWarmSkipped = 0, InCommunityDb = true, CommunityDbPsos = 2_914,
+                ReasonFlags = GameReasonFlags.RayTracingRecordingAvailable,
             },
             // r.RayTracing.AllowPipeline=0: hardware Lumen traces rays inline, compiled from its files; its DXIL libraries go unused
             G("3600000", "SILENT HILL: Townfall", "5.6", "Townfall-Win64-Shipping.exe", 45_741, GameStatus.Ready, "planned from a recording",
@@ -144,7 +145,14 @@ public sealed class FakeScsKiller : IScsKiller
             G("3900040", "Quiet Orbit", "5.4", "QuietOrbit-Win64-Shipping.exe", 29_975, GameStatus.NeedsRecording, Core.Planning.Planner.Record) with
                 { RecorderOverride = RecorderOverride.On, RecorderEffective = true, RecorderInstalled = true, RecorderRefused = ScsKiller.NeverSawNote },
             G("1245620", "ELDEN RING", "-", "eldenring.exe", null, GameStatus.NeedsRecording, ScsKiller.OfflineSessionNote) with { AntiCheat = AntiCheat.EasyAntiCheat,
-                Engine = new EngineInfo("FromSoft", "Dantelion", null, "D3D12", false, null), OfflineEligible = true, OfflineRecord = true },
+                Engine = new EngineInfo("FromSoft", "Dantelion", null, "D3D12", false, null), OfflineEligible = true, OfflineRecord = true,
+                ReasonFlags = GameReasonFlags.OfflineSessionRequired },
+            G("3900050", "反作弊测试游戏", "5.4", "Sample-Win64-Shipping.exe", null, GameStatus.Unsupported,
+                "needs a recording, which its anti-cheat blocks") with
+            {
+                AntiCheat = AntiCheat.Other, NotPlanned = true, RecorderSkip = ScsKiller.SkipAntiCheat,
+                ReasonFlags = GameReasonFlags.AntiCheatRecordingBlocked,
+            },
             G("293760", "Automation", "4.27", "Automation-Win64-Shipping.exe", null, GameStatus.Unsupported, packed, unsupported: packed, at: "gog"),
             // guesses: the version (no build string, no .utoc, no readable package), the DirectX (no DefaultGraphicsRHI), both
             G("CoffeeStainStudios.DeepRockGalactic", "Deep Rock Galactic", "4.27", "FSD-WinGDK-Shipping.exe", 18_350, GameStatus.Ready, "compiles every DirectX 11 shader", at: "xbox")
@@ -290,6 +298,10 @@ public sealed class FakeScsKiller : IScsKiller
             int i = games.FindIndex(x => x.Game.Id == gameId);
             games[i] = g = games[i] with { AntiCheatRecordingAllowed = on, RecorderOverride = on ? RecorderOverride.On : RecorderOverride.Off,
                 RecorderSkip = on ? null : Core.App.ScsKiller.SkipAntiCheat, RecorderEffective = on, RecorderInstalled = on };
+            if (gameId == "steam:3900050")
+                games[i] = g = g with { Status = on ? GameStatus.NeedsRecording : GameStatus.Unsupported,
+                    StatusReason = on ? Core.Planning.Planner.Record : "needs a recording, which its anti-cheat blocks",
+                    ReasonFlags = on ? GameReasonFlags.None : GameReasonFlags.AntiCheatRecordingBlocked, NotPlanned = !on };
         }
         GameChanged?.Invoke(g);
     }

@@ -52,20 +52,19 @@ public sealed partial class SettingsPage : Page
     async void OnApply(object _, RoutedEventArgs __)
     {
         var (label, limit) = SettingsVm.Sizes[SizeBox.SelectedIndex];
-        if (!await App.ConfirmAsync(this, $"Set the shader cache limit to {label}?",
-                $"This is a global {Fmt.Vendor(App.Core.Vendor.Vendor)} driver setting: it applies to every game on this PC, not only the ones SCSKiller compiles, " +
-                "and stays until you change it. Windows will ask for administrator permission.\n\n" +
-                "Raising it deletes nothing. Lowering it below what is used now makes the driver delete older entries, and those games stutter again. " +
-                "You can switch back to the driver default here at any time.",
-                "Change limit")) return;
+        if (!await App.ConfirmAsync(this, $"将着色器缓存上限设为 {label}？",
+                $"这是 {Fmt.Vendor(App.Core.Vendor.Vendor)} 驱动的全局设置，会影响此电脑上的所有游戏，并一直保留到你再次更改。"
+                + "Windows 会请求管理员权限。\n\n提高上限不会删除缓存；若将上限调低到当前用量以下，驱动会删除较旧的条目，相关游戏可能再次卡顿。"
+                + "你可以随时恢复驱动默认值。",
+                "更改上限")) return;
 
         ApplyButton.IsEnabled = false;
         var size = limit.IsDriverDefault ? "default" : limit.Bytes is { } b ? (b / (double)(1L << 30)).ToString(CultureInfo.InvariantCulture) : "unlimited";
         (Vm.ApplyMessage, Vm.ApplySeverity) = await AsAdminAsync(() => App.Core.Vendor.SetCacheLimit(limit), ["cache", "set", size]) switch
         {
-            null => ("Cancelled.", InfoBarSeverity.Informational),
-            { Ok: true } => ($"Shader cache limit set to {label}.", InfoBarSeverity.Success),
-            var r => ("The limit was not changed: " + r.Message, InfoBarSeverity.Error),
+            null => ("已取消。", InfoBarSeverity.Informational),
+            { Ok: true } => ($"着色器缓存上限已设为 {label}。", InfoBarSeverity.Success),
+            var r => ("未更改上限：" + r.Message, InfoBarSeverity.Error),
         };
         ApplyButton.IsEnabled = true;
         Vm.Refresh();
@@ -88,17 +87,17 @@ public sealed partial class SettingsPage : Page
     async void OnApplyAuto(object _, RoutedEventArgs __)
     {
         var level = Vm.AutoChoice;
-        if (!await App.ConfirmAsync(this, level == AutoShaderCompilation.Off ? "Turn off NVIDIA Auto Shader Compilation?" : $"Turn on NVIDIA Auto Shader Compilation ({level})?",
-                "Auto Shader Compilation is a beta feature by NVIDIA®.", level == AutoShaderCompilation.Off ? "Turn off" : "Turn on")) return;
+        if (!await App.ConfirmAsync(this, level == AutoShaderCompilation.Off ? "关闭 NVIDIA 自动着色器编译？" : $"开启 NVIDIA 自动着色器编译（{level}）？",
+                "自动着色器编译是 NVIDIA® 的测试版功能。", level == AutoShaderCompilation.Off ? "关闭" : "开启")) return;
 
         AutoApplyButton.IsEnabled = false;
         // --for-user: the elevated CLI refuses when UAC elevated another administrator (NvOSC would register the task for them).
         string[] cli = ["nvidia-auto-shader", level.ToString().ToLowerInvariant(), Elevated.ForUserArg, Elevated.CurrentUserSid];
         (Vm.AutoMessage, Vm.AutoSeverity) = await AsAdminAsync(() => App.Core.Vendor.SetAutoShaderCompilation(level), cli) switch
         {
-            null => ("Cancelled.", InfoBarSeverity.Informational),
-            { Ok: true } => (level == AutoShaderCompilation.Off ? "Turned off." : $"Turned on ({level}).", InfoBarSeverity.Success),
-            var r => ("Not changed: " + r.Message, InfoBarSeverity.Error),
+            null => ("已取消。", InfoBarSeverity.Informational),
+            { Ok: true } => (level == AutoShaderCompilation.Off ? "已关闭。" : $"已开启（{level}）。", InfoBarSeverity.Success),
+            var r => ("未更改设置：" + r.Message, InfoBarSeverity.Error),
         };
         AutoApplyButton.IsEnabled = true;
         Vm.Refresh();   // re-reads the setting and the task

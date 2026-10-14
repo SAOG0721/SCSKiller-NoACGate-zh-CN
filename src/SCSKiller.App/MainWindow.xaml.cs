@@ -66,7 +66,7 @@ public sealed partial class MainWindow : Window
     public void ShowGpu()
     {
         GpuName.Text = App.Core.Vendor.Gpu.Name;
-        GpuDriver.Text = (App.Core as ScsKiller)?.GpuRestartNote ?? "Driver " + App.Core.Vendor.Gpu.DriverVersion;
+        GpuDriver.Text = (App.Core as ScsKiller)?.GpuRestartNote ?? "驱动 " + App.Core.Vendor.Gpu.DriverVersion;
     }
 
     public void Navigate(Type page, object? arg = null) => ContentFrame.Navigate(page, arg);
@@ -83,18 +83,18 @@ public sealed partial class MainWindow : Window
     {
         var ready = Updater.Ready;   // once: a check may replace it meanwhile
         UpdateButton.Visibility = ready != null ? Visibility.Visible : Visibility.Collapsed;
-        ToolTipService.SetToolTip(UpdateButton, Updater.Problem ?? $"SCSKiller {ready} is ready. Restarting stops a running compile safely " +
-            "(the driver saves its cache first) and continues it afterwards." +
-            (App.Core.Settings.InstallUpdatesAutomatically ? " Otherwise it installs the next time SCSKiller starts or quits." : ""));
+        ToolTipService.SetToolTip(UpdateButton, Updater.Problem ?? $"SCSKiller {ready} 已准备就绪。重启前会安全停止正在运行的编译，" +
+            "等待驱动保存缓存，随后继续编译。" +
+            (App.Core.Settings.InstallUpdatesAutomatically ? " 否则会在下次启动或退出 SCSKiller 时安装。" : ""));
     }
 
     async void OnRestartToUpdate(object _, RoutedEventArgs __)
     {
         UpdateButton.IsEnabled = false;
-        UpdateText.Text = "Finishing the compile…";
+        UpdateText.Text = "正在结束编译…";
         SavePlacement();   // the restart exits without closing the window
         if (await Updater.RestartAsync()) return;   // exits
-        (UpdateButton.IsEnabled, UpdateText.Text) = (true, "Restart to update");
+        (UpdateButton.IsEnabled, UpdateText.Text) = (true, "重启以更新");
         ShowUpdate();
     }
 
@@ -244,6 +244,7 @@ public sealed partial class MainWindow : Window
             foreach (var (name, page, arg) in new (string, Type, object?)[]
                      { ("library", typeof(LibraryPage), null), ("detail", typeof(DetailPage), ff7),
                         ("detail-anticheat", typeof(DetailPage), "steam:1245620"),
+                       ("detail-anticheat-choice", typeof(DetailPage), "steam:3900050"),
                        ("detail-new", typeof(DetailPage), "steam:1139900"),   // never compiled: estimated cache, Clear cache disabled
                        ("detail-stutter", typeof(DetailPage), "steam:990080"),   // known to stutter, with a source link
                        ("detail-partial", typeof(DetailPage), "steam:990080"), // Hogwarts Legacy: a partial plan, the recording hint
@@ -287,7 +288,7 @@ public sealed partial class MainWindow : Window
                     ((SettingsPage)ContentFrame.Content).ScrollToEnd();
                     await Shot("settings-min", 400, "-end");
                 }
-                foreach (var (name, id) in new[] { ("hogwarts", "steam:990080"), ("ff7", ff7), ("ghostrunner", "steam:1139900"),
+                foreach (var (name, id) in new[] { ("hogwarts", "steam:990080"), ("ff7", ff7), ("ghostrunner", "steam:1139900"), ("anticheat-choice", "steam:3900050"),
                                                    ("palworld", "xbox:1623730"), ("eldenring", "steam:1245620"),
                                                    ("atomicheart", "xbox:Sample.AtomicHeart"), ("darwin", "epic:3300000"), ("townfall", "steam:3600000"),
                                                    ("added", "manual:5f1c0e9a2b7d4c30"), ("tekken", "steam:1778820"), ("racer", "steam:4078430"), ("unreached", "xbox:Sample.HollowCircuit"), ("bothapis", "gaijin:warthunder"),

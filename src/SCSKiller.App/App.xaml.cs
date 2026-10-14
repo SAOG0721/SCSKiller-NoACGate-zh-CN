@@ -115,8 +115,8 @@ public partial class App : Application
             return;   // no tray icon, no notification, no single-instance registration
         }
 
-        // design data: the bundled text, no network
-        if (!Core.Settings.WelcomeSeen) ShowWelcome(Core is FakeScsKiller ? Task.FromResult<WelcomeContent?>(null) : WelcomeContent.FetchAsync());
+        // This fork's warning and upstream-service disclosure must not be replaced by upstream welcome content.
+        if (!Core.Settings.WelcomeSeen) ShowWelcome(Task.FromResult<WelcomeContent?>(null));
 
         tray = CreateTray();
         UpdateTip();
@@ -248,8 +248,8 @@ public partial class App : Application
         Core.Settings = Core.Settings with { TrayNoticeShown = true };
         AppNotificationManager.Default.Show(new AppNotificationBuilder()
             .AddArgument("action", "open")
-            .AddText("SCSKiller is still running")
-            .AddText("It's in the notification area, right-click the icon to quit.")
+            .AddText("SCSKiller 仍在运行")
+            .AddText("程序已移到通知区域；右键单击图标可退出。")
             .BuildNotification());
     }
 
@@ -289,7 +289,7 @@ public partial class App : Application
 
     public static ContentDialog Confirm(Page page, string title, object content, string primaryText, ContentDialogButton defaultButton = ContentDialogButton.Close) => new()
     {
-        XamlRoot = page.XamlRoot, Title = title, Content = content, PrimaryButtonText = primaryText, CloseButtonText = "Cancel", DefaultButton = defaultButton,
+        XamlRoot = page.XamlRoot, Title = title, Content = content, PrimaryButtonText = primaryText, CloseButtonText = "取消", DefaultButton = defaultButton,
     };
 
     /// <summary>None when another dialog is open: WinUI shows one at a time and throws, which an async void
@@ -324,14 +324,14 @@ public partial class App : Application
         var t = new Tray(Path.Combine(AppContext.BaseDirectory, "Assets", "app.ico"))
         {
             Open = ShowWindow,
-            PauseLabel = () => Running() is not { } q ? null : q.Stage == QueueStage.Paused ? "Resume" : "Pause compiling",
+            PauseLabel = () => Running() is not { } q ? null : q.Stage == QueueStage.Paused ? "继续编译" : "暂停编译",
             PauseOrResume = () => Fmt.PauseOrResume(Running()),
             Quit = () => _ = QuitAsync(),
-            QuitLabel = () => quitNow != null ? "Quit now (loses unsaved cache)" : "Quit",
+            QuitLabel = () => quitNow != null ? "立即退出（未保存的缓存会丢失）" : "退出",
             SessionEnding = hwnd =>
             {
                 if (Running() == null) return;
-                ShutdownBlockReasonCreate(hwnd, "Stopping the compile so the graphics driver can save its shader cache");
+                ShutdownBlockReasonCreate(hwnd, "正在停止编译，以便显卡驱动保存着色器缓存");
                 StopAll();
             },
             SessionEnd = hwnd =>
@@ -353,12 +353,12 @@ public partial class App : Application
         if (tray == null) return;
         var q = Running();
         var name = q == null ? null : Core.Games.FirstOrDefault(g => g.Game.Id == q.GameId)?.Game.Name ?? q.GameId;
-        tray.Tip = quitting ? "SCSKiller: finishing, the driver is saving the shader cache"
-            : q == null ? "SCSKiller: idle"
-            : q.PlanCheck ? "SCSKiller: checking games for more to compile"
-            : q.Stage == QueueStage.Paused ? $"SCSKiller: paused ({name})"
-            : q is { Stage: QueueStage.Warming, Progress: { Total: > 0 } p } ? $"Compiling {name}, {100.0 * p.Done / p.Total:0}%"
-            : $"Compiling {name}";
+        tray.Tip = quitting ? "SCSKiller：正在结束，显卡驱动正在保存着色器缓存"
+            : q == null ? "SCSKiller：空闲"
+            : q.PlanCheck ? "SCSKiller：正在检查游戏是否有新内容可编译"
+            : q.Stage == QueueStage.Paused ? $"SCSKiller：已暂停（{name}）"
+            : q is { Stage: QueueStage.Warming, Progress: { Total: > 0 } p } ? $"正在编译 {name}，{100.0 * p.Done / p.Total:0}%"
+            : $"正在编译 {name}";
     }
 
     static QueueItem? Running() => Core.Queue.FirstOrDefault(Format.Running);
@@ -410,15 +410,14 @@ public partial class App : Application
     static AppNotification DriverToast(IReadOnlyList<GameState> stale)
     {
         var time = TimeSpan.FromTicks(stale.Sum(g => (g.EstimatedWarmTime ?? TimeSpan.Zero).Ticks));
-        string games = stale.Count == 1 ? "1 game needs" : $"{stale.Count} games need";
         return new AppNotificationBuilder()
             .AddArgument("action", "open")
-            .AddText($"{Fmt.Vendor(Core.Vendor.Vendor)} driver updated")
-            .AddText($"Driver {Core.Vendor.Gpu.DriverVersion} cleared the shader cache. {games} rebuilding: " +
-                     $"{string.Join(", ", stale.Select(g => g.Game.Name))}" + (time > TimeSpan.Zero ? $", about {Format.Duration(time)}." : "."))
-            .AddButton(new AppNotificationButton("Compile now").AddArgument("action", "now"))
-            .AddButton(new AppNotificationButton("When idle").AddArgument("action", "idle"))
-            .AddButton(new AppNotificationButton("Skip").AddArgument("action", "skip"))
+            .AddText($"{Fmt.Vendor(Core.Vendor.Vendor)} 显卡驱动已更新")
+            .AddText($"驱动 {Core.Vendor.Gpu.DriverVersion} 清除了着色器缓存。{stale.Count} 款游戏需要重新编译：" +
+                     $"{string.Join("、", stale.Select(g => g.Game.Name))}" + (time > TimeSpan.Zero ? $"；预计 {Format.Duration(time)}。" : "。"))
+            .AddButton(new AppNotificationButton("立即编译").AddArgument("action", "now"))
+            .AddButton(new AppNotificationButton("空闲时编译").AddArgument("action", "idle"))
+            .AddButton(new AppNotificationButton("跳过").AddArgument("action", "skip"))
             .BuildNotification();
     }
 
@@ -439,11 +438,11 @@ public partial class App : Application
         var n = NewShaders.Count(games[0]);
         return new AppNotificationBuilder()
             .AddArgument("action", "shaders-show").AddArgument("games", ids)
-            .AddText("New shaders to compile")
-            .AddText(games.Count == 1 ? $"{games[0].Game.Name} has {n:N0} new pipeline{(n == 1 ? "" : "s")}. Compile now so they don't stutter."
-                : $"{games.Count} games have new shaders to compile")
-            .AddButton(new AppNotificationButton("Compile now").AddArgument("action", "shaders-compile").AddArgument("games", ids))
-            .AddButton(new AppNotificationButton("Show").AddArgument("action", "shaders-show").AddArgument("games", ids))
+            .AddText("有新着色器可编译")
+            .AddText(games.Count == 1 ? $"{games[0].Game.Name} 新增 {n:N0} 条管线。现在编译可减少首次运行时的卡顿。"
+                : $"{games.Count} 款游戏有新着色器可编译")
+            .AddButton(new AppNotificationButton("立即编译").AddArgument("action", "shaders-compile").AddArgument("games", ids))
+            .AddButton(new AppNotificationButton("查看").AddArgument("action", "shaders-show").AddArgument("games", ids))
             .BuildNotification();
     }
 

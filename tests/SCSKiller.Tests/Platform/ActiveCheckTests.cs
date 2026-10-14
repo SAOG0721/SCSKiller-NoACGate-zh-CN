@@ -124,12 +124,12 @@ public class ActiveCheckTests : IDisposable
     }
 
     [Fact]
-    public void The_check_is_on_by_default_also_for_settings_saved_before_it_existed()
+    public void The_fork_does_not_send_an_upstream_active_check_by_default()
     {
-        Assert.True(AppStore.DefaultSettings.ActiveCheck);
-        var saved = System.Text.Json.Nodes.JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(AppStore.DefaultSettings with { ActiveCheck = false }, AppStore.Json))!.AsObject();
-        Assert.False(System.Text.Json.JsonSerializer.Deserialize<Settings>(saved, AppStore.Json)!.ActiveCheck);
-        Assert.True(saved.Remove("ActiveCheck"));
+        Assert.False(AppStore.DefaultSettings.ActiveCheck);
+        var saved = System.Text.Json.Nodes.JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(AppStore.DefaultSettings with { ActiveCheck = true }, AppStore.Json))!.AsObject();
         Assert.True(System.Text.Json.JsonSerializer.Deserialize<Settings>(saved, AppStore.Json)!.ActiveCheck);
+        Assert.True(saved.Remove("ActiveCheck"));
+        Assert.False(System.Text.Json.JsonSerializer.Deserialize<Settings>(saved, AppStore.Json)!.ActiveCheck);
     }
 }

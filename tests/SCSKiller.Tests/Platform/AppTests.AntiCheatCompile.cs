@@ -58,6 +58,7 @@ public partial class AppTests
     {
         var s = (await AntiCheatGame().ScanAsync(default)).Single();
         Assert.Equal((GameStatus.Unsupported, "needs a recording, which EasyAntiCheat blocks", true), (s.Status, s.StatusReason, s.NotPlanned));   // "Not supported"
+        Assert.True(s.ReasonFlags.HasFlag(GameReasonFlags.AntiCheatRecordingBlocked));
     }
 
     [Fact]
@@ -70,6 +71,7 @@ public partial class AppTests
         k.Store.SaveGame(_game.Id, rec);
         var s = (await k.ScanAsync(default)).Single();
         Assert.Equal((GameStatus.NeedsRecording, false, null), (s.Status, s.NotPlanned, s.RecorderSkip));
+        Assert.False(s.ReasonFlags.HasFlag(GameReasonFlags.AntiCheatRecordingBlocked));
     }
 
     /// <summary>An EasyAntiCheat game an offline session can record (Games.OfflineEac), with no recording yet: "Needs an offline
@@ -81,6 +83,8 @@ public partial class AppTests
         Assert.Equal((GameStatus.NeedsRecording, "EasyAntiCheat blocks the recorder, but you can record at your own risk with an offline session.", false),
             (s.Status, s.StatusReason, s.NotPlanned));
         Assert.True(ScsKiller.NeedsOfflineSession(s) && s.OfflineEligible);
+        Assert.True(s.ReasonFlags.HasFlag(GameReasonFlags.OfflineSessionRequired));
+        Assert.True(ScsKiller.NeedsOfflineSession(s with { StatusReason = "需要离线会话" }));
         Assert.Equal(s.StatusReason, Format.ShortNote(s));
         Assert.Equal(s.StatusReason, Format.ShortNote(s with { RecorderInstalled = true }));   // an offline session under way keeps the line
         Assert.Empty(StutterList.Recommended([s with { KnownStutter = new KnownStutter(StutterSeverity.Severe, "", "", "2026-01-01") }]));   // a ban risk isn't recommended

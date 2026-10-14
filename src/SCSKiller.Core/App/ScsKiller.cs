@@ -659,7 +659,7 @@ public sealed partial class ScsKiller : IScsKiller
         ConfirmedEngines.Current = list;
         lock (_refreshLock)
             foreach (var s in Games)
-                if (s.StatusReason.Contains(Planner.UntestedNote) && RootSig.Verified(s.Engine!)) Refresh(s.Game);
+                if (s.ReasonFlags.HasFlag(GameReasonFlags.PlannerUntested) && RootSig.Verified(s.Engine!)) Refresh(s.Game);
     }
 
     // the recorder's default and the status follow the list, so a game it changes is re-evaluated and reconciled
@@ -847,28 +847,32 @@ public sealed partial class ScsKiller : IScsKiller
         var partlyCompiled = IsPartlyCompiled(rejected, psos);
         // its rejects explain a first launch that still compiles: not a cache that ignores the warm
         var unreached = IsUnreached(rec) && nvidia && !partlyCompiled;
-        var (status, reason) = check.Readiness switch
+        var (status, reason, reasonFlags) = check.Readiness switch
         {
-            _ when GameVerdicts.Current.Unsupported(g, engine) is { } why => (GameStatus.Unsupported, why.Text),
-            _ when reshade is { Blocks: true } => (GameStatus.Unsupported, ShaderModReason(reshade)),
-            Readiness.Unsupported => (GameStatus.Unsupported, check.Reason),
-            _ when CantReach(g, rec, gpuNow) => (GameStatus.Unsupported, CantReachReason),
+            _ when GameVerdicts.Current.Unsupported(g, engine) is { } why => (GameStatus.Unsupported, why.Text, GameReasonFlags.None),
+            _ when reshade is { Blocks: true } => (GameStatus.Unsupported, ShaderModReason(reshade), GameReasonFlags.None),
+            Readiness.Unsupported => (GameStatus.Unsupported, check.Reason, GameReasonFlags.None),
+            _ when CantReach(g, rec, gpuNow) => (GameStatus.Unsupported, CantReachReason, GameReasonFlags.CacheUnreachable),
             // no plan source at all: the game files, this PC's recording and the community's were each checked
             Readiness.NeedsRecording when !allowAntiCheatRecording && OfflineEac.Of(g, antiCheat, engine) != null && !File.Exists(RecordingPath(g.Id)) && CommunityInUse(g.Id) == null
-                => (GameStatus.NeedsRecording, OfflineSessionNote),   // a recording without draws keeps the arm below
-            Readiness.NeedsRecording when noRecording != null => (GameStatus.Unsupported, $"needs a recording, {noRecording}" + DbNote(inDb)),
-            Readiness.NeedsRecording => (GameStatus.NeedsRecording, check.Reason + DbNote(inDb)),
+                => (GameStatus.NeedsRecording, OfflineSessionNote, GameReasonFlags.OfflineSessionRequired),   // a recording without draws keeps the arm below
+            Readiness.NeedsRecording when noRecording != null => (GameStatus.Unsupported, $"needs a recording, {noRecording}" + DbNote(inDb),
+                antiCheat != AntiCheat.None && !allowAntiCheatRecording ? GameReasonFlags.AntiCheatRecordingBlocked : GameReasonFlags.None),
+            Readiness.NeedsRecording => (GameStatus.NeedsRecording, check.Reason + DbNote(inDb), GameReasonFlags.None),
             // a recording can't help a game the warm doesn't reach
-            _ when unreached => (rec.WarmedAt == null ? GameStatus.Ready : GameStatus.Warmed, UnreachedReason),
+            _ when unreached => (rec.WarmedAt == null ? GameStatus.Ready : GameStatus.Warmed, UnreachedReason, GameReasonFlags.None),
             // the plan compiles the rest, but not the game's ray tracing: that needs a recording (compiling stays possible, partial)
-            _ when rt && noRecording == null && rec.WarmedAt == null => (GameStatus.NeedsRecording, RtNote(inDb)),
-            _ when rec.WarmedAt == null => (GameStatus.Ready, RtBlocked(rt, noRecording, PartialNote(rec.Plan?.Stats) ?? check.Reason) + unseen),
-            _ when StaleReason(g, rec, pending, gpuNow) is { } why => (GameStatus.Stale, why),
+            _ when rt && noRecording == null && rec.WarmedAt == null => (GameStatus.NeedsRecording, RtNote(inDb), GameReasonFlags.None),
+            _ when rec.WarmedAt == null => (GameStatus.Ready, RtBlocked(rt, noRecording, PartialNote(rec.Plan?.Stats) ?? check.Reason) + unseen, GameReasonFlags.None),
+            _ when StaleInfo(g, rec, pending, gpuNow) is { } stale => (GameStatus.Stale, stale.Reason,
+                stale.PlannerExpanded ? GameReasonFlags.PlannerExpanded : GameReasonFlags.None),
             _ => (GameStatus.Warmed, RtBlocked(rt, noRecording, (partlyCompiled ? $"partly compiled for driver {rec.WarmedDriverVersion}: {RefusedNote(rejected ?? 0, psos ?? 0)}"
                     : cap is { } t && PartlyWarmedNote(rec, t, careful) is { } partly
                     ? $"partly warmed for driver {rec.WarmedDriverVersion}: {partly}" : $"warmed for driver {rec.WarmedDriverVersion}")
-                + (PartialNote(rec.Plan?.Stats) is { } partial ? "; " + partial : "")) + unseen),
+                + (PartialNote(rec.Plan?.Stats) is { } partial ? "; " + partial : "")) + unseen,
+                rt && noRecording == null ? GameReasonFlags.RayTracingRecordingAvailable : GameReasonFlags.None),
         };
+        if (check.Reason.Contains(Planner.UntestedNote, StringComparison.Ordinal)) reasonFlags |= GameReasonFlags.PlannerUntested;
         return WithRecorder(new GameState(g, engine, antiCheat, status, reason, rec.ShaderCount, rec.Plan?.Stats,
             psos * (long)(rec.BytesPerPso ?? DefaultBytesPerPso),
             rec.Careful && careful != null ? careful : fast,
@@ -888,7 +892,7 @@ public sealed partial class ScsKiller : IScsKiller
                 LastFrames = frames, ShaderMod = shaderMod?.Mod, ShaderModBlocks = reshade?.Blocks == true, ShaderModLayer = reshade?.Layered == true,
                 ShaderModAsD3D12 = reshade is { Layered: true, AsD3D12: true }, RtUnseen = rtUnseen, RtToPlan = rtToPlan, RecordedEnough = rec.RecordedLong, RootUnconfirmed = unconfirmed,
                 StreamlineFirst = slFirst && engine != null && check.Readiness != Readiness.Unsupported,
-                NoStutter = NoStutterOf(g, engine, StutterList.Current.Find(g)),
+                NoStutter = NoStutterOf(g, engine, StutterList.Current.Find(g)), ReasonFlags = reasonFlags,
                 CompileUnreached = unreached && status != GameStatus.Unsupported,
                 NotPlanned = GameVerdicts.Current.Unsupported(g, engine) is { } verdict ? verdict.Kind == GameVerdicts.UnsupportedVerdict
                     : status == GameStatus.Unsupported && reshade is not { Blocks: true } && antiCheat != AntiCheat.None   // a recording its anti-cheat blocks
@@ -1058,7 +1062,7 @@ public sealed partial class ScsKiller : IScsKiller
     /// <summary>The end of a Warmed reason when a recording would add the game's ray tracing: compiled, the recording offered.</summary>
     public const string RtAfterRecordingNote = "ray tracing needs a 5-min recording";
 
-    public static bool RtAfterRecording(GameState s) => s.Status == GameStatus.Warmed && s.StatusReason.Contains(RtAfterRecordingNote, StringComparison.Ordinal);
+    public static bool RtAfterRecording(GameState s) => s.Status == GameStatus.Warmed && s.ReasonFlags.HasFlag(GameReasonFlags.RayTracingRecordingAvailable);
 
     /// <summary>The game page's note under a compilable status when the plan rests on a guess: a guessed Unreal version
     /// changes DirectX 12 root signatures (DirectX 11 has none), a DirectX that is the engine's default may not be the
@@ -1078,7 +1082,7 @@ public sealed partial class ScsKiller : IScsKiller
     public const string OfflineSessionNote = "EasyAntiCheat blocks the recorder, but you can record at your own risk with an offline session.";
 
     /// <summary>The game waits for an offline session (<see cref="OfflineSessionNote"/>).</summary>
-    public static bool NeedsOfflineSession(GameState s) => s.Status == GameStatus.NeedsRecording && s.StatusReason == OfflineSessionNote;
+    public static bool NeedsOfflineSession(GameState s) => s.Status == GameStatus.NeedsRecording && s.ReasonFlags.HasFlag(GameReasonFlags.OfflineSessionRequired);
 
     /// <summary>The last community manifest fetched (community\manifest.bin), re-read when the file changes; null when there is none.</summary>
     CommunityManifest? LocalManifest()
@@ -1479,17 +1483,24 @@ public sealed partial class ScsKiller : IScsKiller
 
     /// <param name="pending"><see cref="PendingOf"/>, when the caller has it</param>
     /// <param name="gpu">the evaluation's snapshot, so its reason and driver verdict agree; null = now</param>
-    string? StaleReason(Game g, GameRecord r, Pending? pending = null, GpuSnapshot? gpu = null)
+    readonly record struct StaleInfoResult(string Reason, bool PlannerExpanded = false);
+
+    StaleInfoResult? StaleInfo(Game g, GameRecord r, Pending? pending = null, GpuSnapshot? gpu = null)
     {
         var p = pending ?? PendingOf(g, r);
-        return WarmChanged(g, r, gpu)
-            ?? (p.Unknown ? (p.Recorded + (p.Planned ?? 0) is > 0 and var u ? $"{u:N0} pipeline{(u == 1 ? "" : "s")} to compile again" : "compile again")
-                + ": what the last compile replayed is no longer known" : null)
-            ?? (r.WarmedPlanVersion != Planner.Version ? PlannerChanged(r, p.Planned)
-                : Settings.MaximumPlans && r.WarmedPerStage ? "Maximum mode: every shader pairing is still to compile" : null)   // Maximum -> standard: nothing new
-            ?? (p.Recorded + (r.WarmedPlanVersion == Planner.Version ? p.Planned ?? 0 : 0) is > 0 and var n
-                ? $"{n:N0} new {NewKind(n, p)}; compile again to include them" : null);
+        if (WarmChanged(g, r, gpu) is { } changed) return new(changed);
+        if (p.Unknown) return new((p.Recorded + (p.Planned ?? 0) is > 0 and var u ? $"{u:N0} pipeline{(u == 1 ? "" : "s")} to compile again" : "compile again")
+            + ": what the last compile replayed is no longer known");
+        if (r.WarmedPlanVersion != Planner.Version)
+        {
+            if (PlannerChanged(r, p.Planned) is { } planner) return new(planner, r.PlanVersion == Planner.Version && p.Planned is > 0);
+        }
+        else if (Settings.MaximumPlans && r.WarmedPerStage) return new("Maximum mode: every shader pairing is still to compile");   // Maximum -> standard: nothing new
+        return p.Recorded + (r.WarmedPlanVersion == Planner.Version ? p.Planned ?? 0 : 0) is > 0 and var n
+            ? new($"{n:N0} new {NewKind(n, p)}; compile again to include them") : null;
     }
+
+    string? StaleReason(Game g, GameRecord r, Pending? pending = null, GpuSnapshot? gpu = null) => StaleInfo(g, r, pending, gpu)?.Reason;
 
     /// <summary>What <paramref name="n"/> new pipelines are: all recorded, all from upscaler packs, or a mix.</summary>
     static string NewKind(long n, Pending p) => (n == 1 ? "pipeline" : "pipelines") is var w && n == p.Upscaler ? "upscaler " + w
@@ -2964,7 +2975,7 @@ public sealed partial class ScsKiller : IScsKiller
         : s.ShaderModBlocks ? SkipShaderMod
         : s.RootUnconfirmed ? SkipManual
         : s.StreamlineFirst ? SkipStreamline   // its status is Unsupported for this reason, not "not supported yet"
-        : s.Engine == null || s.Status == GameStatus.Unsupported && s.StatusReason != CantReachReason ? SkipUnsupported   // its recorder learns the launched exe name's case, which may let a compile reach it
+        : s.Engine == null || s.Status == GameStatus.Unsupported && !s.ReasonFlags.HasFlag(GameReasonFlags.CacheUnreachable) ? SkipUnsupported   // its recorder learns the launched exe name's case, which may let a compile reach it
         : !s.Engine.GraphicsApi.Contains("D3D12") ? SkipNotDx12   // the proxy is d3d12.dll; "D3D11 or D3D12" may run on it
         : modSkip != null ? modSkip   // ReShade, OptiScaler, another wrapper: never replaced, chained only when the user asks
         : s.Game.ExePath.Contains(@"\WindowsApps\", StringComparison.OrdinalIgnoreCase) ? SkipNeedsAdmin
@@ -4053,7 +4064,7 @@ public sealed partial class ScsKiller : IScsKiller
     void Add(string gameId, bool whenIdle, bool planCheck = false, bool prompt = false)
     {
         if (!planCheck && Games.FirstOrDefault(s => s.Game.Id == gameId) is { } listed
-            && (GameVerdicts.Current.Unsupported(listed.Game, listed.Engine) != null || listed.StatusReason == CantReachReason)) return;
+            && (GameVerdicts.Current.Unsupported(listed.Game, listed.Engine) != null || listed.ReasonFlags.HasFlag(GameReasonFlags.CacheUnreachable))) return;
         QueueItem item;
         lock (_lock)
         {

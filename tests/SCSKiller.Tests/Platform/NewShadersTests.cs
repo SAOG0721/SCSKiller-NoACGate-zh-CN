@@ -10,10 +10,12 @@ public class NewShadersTests
     static readonly DateTimeOffset Now = At.AddDays(3);
 
     static GameState S(string id, long recorded = 0, long? planNew = null, GameStatus status = GameStatus.Stale, AntiCheat antiCheat = AntiCheat.None,
-        bool playing = false, string driver = Driver, DateTimeOffset? warmedAt = null, long plan = 0, string reason = "") =>
+        bool playing = false, string driver = Driver, DateTimeOffset? warmedAt = null, long plan = 0, string reason = "",
+        bool plannerExpanded = false) =>
         new GameState(new Game(id, id, Store.Steam, "", ""), null, antiCheat, status, reason, null, plan > 0 ? new PlanStats(plan, 0, 0, 0, false) : null,
                 null, null, driver, warmedAt ?? At, null, false, null)
-            with { RecordedSinceWarm = recorded, NewPipelines = planNew, Playing = playing };
+            with { RecordedSinceWarm = recorded, NewPipelines = planNew, Playing = playing,
+                ReasonFlags = plannerExpanded ? GameReasonFlags.PlannerExpanded : GameReasonFlags.None };
 
     static (IReadOnlyList<GameState> Due, Dictionary<string, string> Notified) Due(Dictionary<string, string> notified, params GameState[] games) =>
         DueAt(Now, notified, games);
@@ -68,7 +70,7 @@ public class NewShadersTests
             S("small-plan", recorded: 100, plan: 2_484),
             S("share", recorded: 560, plan: 55_910),
             S("huge-plan", recorded: 1_000, plan: 490_695),
-            S("planner", planNew: 2, plan: 109_245, reason: "SCSKiller can now compile 2 more pipelines for this game"));   // told as before
+            S("planner", planNew: 2, plan: 109_245, reason: "新版计划器可编译更多管线", plannerExpanded: true));   // display text does not decide the notification
         Assert.Equal(["small-plan", "share", "huge-plan", "planner"], due.Select(s => s.Game.Id));
         Assert.Equal(1_000, NewShaders.Enough(S("x", plan: 490_695)));
         Assert.Equal(559, NewShaders.Enough(S("x", plan: 55_910)));
@@ -97,7 +99,7 @@ public class NewShadersTests
         Assert.Single(due);
 
         (due, _) = DueAt(Now.AddHours(25), notified,
-            S("a", recorded: 2_000, reason: "SCSKiller can now compile 1,100 more pipelines for this game"));   // a newer planner: as before
+            S("a", recorded: 2_000, reason: "SCSKiller can now compile 1,100 more pipelines for this game", plannerExpanded: true));   // a newer planner: as before
         Assert.Single(due);
     }
 
@@ -118,7 +120,7 @@ public class NewShadersTests
         (due, _) = DueAt(Now.AddDays(1), notified, S("a", recorded: 2_000));
         Assert.Single(due);
 
-        (due, notified) = Due(new() { ["a"] = key }, S("a", recorded: 300, reason: "SCSKiller can now compile 300 more pipelines for this game"));
+        (due, notified) = Due(new() { ["a"] = key }, S("a", recorded: 300, reason: "SCSKiller can now compile 300 more pipelines for this game", plannerExpanded: true));
         Assert.Empty(due);   // what it told may have been this compile's planner notification
         Assert.Equal($"{key}|{Now.UtcTicks}|p", notified["a"]);
     }
@@ -148,15 +150,15 @@ public class NewShadersTests
     public void A_rebuilt_plan_is_told_once_per_compile()
     {
         const string Planner = "SCSKiller can now compile 1,244 more pipelines for this game";
-        var (due, notified) = Due([], S("a", recorded: 1_178, planNew: 1_244, reason: Planner));
+        var (due, notified) = Due([], S("a", recorded: 1_178, planNew: 1_244, reason: Planner, plannerExpanded: true));
         Assert.Single(due);
         Assert.EndsWith("|p", notified["a"]);
 
-        (due, notified) = DueAt(Now.AddSeconds(2), notified, S("a", recorded: 1_181, planNew: 1_244, reason: Planner));
+        (due, notified) = DueAt(Now.AddSeconds(2), notified, S("a", recorded: 1_181, planNew: 1_244, reason: Planner, plannerExpanded: true));
         Assert.Empty(due);
 
         (due, _) = DueAt(Now.AddHours(1), notified, S("a", planNew: 27_647, warmedAt: At.AddDays(1),
-            reason: "SCSKiller can now compile 27,647 more pipelines for this game"));
+            reason: "SCSKiller can now compile 27,647 more pipelines for this game", plannerExpanded: true));
         Assert.Single(due);   // another compile's plan, within the day
     }
 

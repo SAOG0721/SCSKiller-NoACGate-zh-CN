@@ -12,6 +12,9 @@ namespace SCSKiller.App;
 /// didn't install (dev, the zip) never checks.</summary>
 public static class Updater
 {
+    // The fork has no independently signed feed or installer yet. Keep all automatic checks and staged applies off
+    // until its own release keys, package identity and channels have been verified together.
+    public const bool ForkUpdatesEnabled = false;
     static readonly SemaphoreSlim One = new(1, 1);
     // no static here may build an UpdateManager: one needs Velopack's locator, which UpdateHooks.Run sets
     static readonly string DataDir = UpdateHooks.DataDir;
@@ -31,7 +34,7 @@ public static class Updater
     /// <summary>Raised on any thread after <see cref="Ready"/>, <see cref="Checking"/>, <see cref="Downloading"/>,
     /// <see cref="UpToDate"/> or <see cref="Problem"/> changed.</summary>
     public static event Action? Changed;
-    public static string? Ready => Usable(ready) is { } d ? d.S.Version : null;
+    public static string? Ready => Installed && Usable(ready) is { } d ? d.S.Version : null;
 
     static string Chosen() => UpdateChannels.Effective(App.Core.Settings.UpdateChannel, AppVersion.Current.Channel, App.Account.Status?.Ent);
 
@@ -126,6 +129,7 @@ public static class Updater
     /// then <paramref name="apply"/>.</summary>
     static async Task<bool> ApplyAsync(TimeSpan wait, Action<Velo, VelopackAsset> apply, Func<bool>? still = null)
     {
+        if (!Installed) return false;
         if (!await One.WaitAsync(wait)) return false;
         try
         {
@@ -181,7 +185,7 @@ public static class Updater
     const string OfflineRunning = "An offline session's game or cleanup is running. The update installs once it has ended.";
 
     /// <summary>Read on first use, after UpdateHooks.Run; a failure isn't kept, the next use tries again.</summary>
-    public static bool Installed => installed.Value;
+    public static bool Installed => ForkUpdatesEnabled && installed.Value;
     static readonly Lazy<bool> installed = new(() => Manager(UpdateChannels.Stable, false).IsInstalled, LazyThreadSafetyMode.PublicationOnly);
 
     /// <summary>At app start (real data only): check soon and every hour.</summary>
@@ -243,6 +247,7 @@ public static class Updater
     /// check's failure shows at once.</summary>
     public static Task CheckNowAsync()
     {
+        if (!Installed) return Task.CompletedTask;
         asked = true;
         return CheckAsync();
     }
@@ -330,6 +335,7 @@ public static class Updater
     /// still downloads after 30 s: then at the next start.</summary>
     public static async Task ApplyOnExitAsync()
     {
+        if (!Installed) return;
         if (Usable(ready) is not { } d) return;
         if (HeldBack() is { } why)
         {
@@ -349,6 +355,7 @@ public static class Updater
     /// stopped (each game's ResumeAt). False (and <see cref="Problem"/>) when the driver-update task's compile still runs.</summary>
     public static async Task<bool> RestartAsync()
     {
+        if (!Installed) return false;
         if (Usable(ready) is null) return false;
         if (!BeginUpdate())
         {
@@ -388,7 +395,7 @@ public static class Updater
         }
     }
 
-    public static bool HasResume => File.Exists(ResumeFile);
+    public static bool HasResume => ForkUpdatesEnabled && File.Exists(ResumeFile);
 
     /// <summary>After "Restart to update": the queue as it was, each game from where its warm stopped.</summary>
     public static void ResumeQueue()

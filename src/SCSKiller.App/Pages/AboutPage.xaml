@@ -19,6 +19,8 @@
                         <TextBlock Text="SCSKiller-NoACGate-zh-CN" Style="{StaticResource Section}" FontSize="20" />
                         <TextBlock Text="着色器卡顿预编译 · 简体中文 fork" Style="{StaticResource Secondary}" />
                         <TextBlock Text="{x:Bind Vm.Version}" Style="{StaticResource Caption}" IsTextSelectionEnabled="True" />
+                        <TextBlock Text="本 fork 尚未提供独立签名的安装包；自动更新暂时停用。发布信息请查看本 fork 的 GitHub 仓库。"
+                                   Style="{StaticResource Caption}" TextWrapping="Wrap" />
                         <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,4,0,0" Visibility="{x:Bind Vm.ShowsCheck}">
                             <Button Content="检查更新" Click="OnCheckForUpdates" IsEnabled="{x:Bind Vm.CanCheck, Mode=OneWay}" />
                             <TextBlock Text="{x:Bind Vm.UpdateNote, Mode=OneWay}" Style="{StaticResource Caption}" VerticalAlignment="Center" TextWrapping="Wrap" />

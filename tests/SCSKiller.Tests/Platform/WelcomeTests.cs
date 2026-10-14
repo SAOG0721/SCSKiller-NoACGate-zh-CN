@@ -21,10 +21,10 @@ public class WelcomeTests
     [Fact]
     public void Bundled_default_is_valid()
     {
-        Assert.Equal("Welcome to SCSKiller", WelcomeContent.Default.Title);
+        Assert.Equal("欢迎使用 SCSKiller-NoACGate-zh-CN", WelcomeContent.Default.Title);
         Assert.Equal(3, WelcomeContent.Default.Paragraphs.Count);
-        Assert.Equal("Sign in with Patreon", WelcomeContent.Default.SignIn);
-        Assert.StartsWith("Help improve the community shader hash database", WelcomeContent.Default.Share);
+        Assert.Equal("使用 Patreon 登录", WelcomeContent.Default.SignIn);
+        Assert.StartsWith("向上游社区数据库匿名分享", WelcomeContent.Default.Share);
     }
 
     [Theory]
