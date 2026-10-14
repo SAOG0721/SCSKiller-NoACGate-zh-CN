@@ -67,6 +67,19 @@ public class FormatTests
         Assert.Contains("目前无法判断", Format.RecorderRefused(ScsKiller.NeverSawNote));
     }
 
+    [Fact]
+    public void Queue_display_translates_known_reasons_without_changing_diagnostic_values()
+    {
+        Assert.Equal("电脑空闲时开始", Format.QueueNote(ScsKiller.WhenIdleNote));
+        Assert.Equal("已 3 分钟无进展", Format.QueueNote(ScsKiller.StalledNote(TimeSpan.FromMinutes(3))));
+        Assert.Equal("2 条失败（驱动拒绝），3 条跳过（会使显卡驱动崩溃）", Format.QueueNote(ScsKiller.WarmCounts(2, 0, 3)!));
+        Assert.Equal("已暂停", Format.QueueStageName(QueueStage.Paused));
+        var q = new QueueItem("g", QueueStage.Done, new WarmProgress(5, 9, 2, 10), null, ScsKiller.WarmCounts(2, 0));
+        Assert.Contains("2 条失败（驱动拒绝）", Format.QueueProgress(q));
+        Assert.Equal("diagnostic detail", Format.QueueNote("diagnostic detail"));
+        Assert.Contains("自行准备着色器", Format.NoStutterReason("Its engine prepares shaders at startup"));
+    }
+
     /// <summary>"Not supported yet · An app update is needed for support": an unsupported game's page and Library tooltip
     /// add no notes to its reason, not a shader mod's; other statuses keep them.</summary>
     [Fact]

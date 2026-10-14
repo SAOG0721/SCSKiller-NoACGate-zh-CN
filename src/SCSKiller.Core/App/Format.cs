@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace SCSKiller.Core.App;
 
 /// <summary>Text the app and the CLI show.</summary>
@@ -164,6 +166,60 @@ public static class Format
             _ => $"代理拒绝录制（原因代码：{code}）。",
         };
     }
+
+    /// <summary>Queue notes are diagnostic values in Core; translate the known ones only when shown to a player.</summary>
+    public static string QueueNote(string note)
+    {
+        if (note == ScsKiller.WhenIdleNote) return "电脑空闲时开始";
+        if (note == ScsKiller.AnotherCompileNote) return "正在等待另一进程完成此游戏的编译";
+        if (note == "already compiled: the new plan adds nothing") return "已经编译；新计划没有增加内容";
+        if (note == "plan built") return "编译计划已生成";
+        if (note == "paused until the PC is idle") return "已暂停，等待电脑空闲";
+        if (note == "recovering from a GPU driver crash") return "正在从显卡驱动崩溃中恢复";
+        if (note.StartsWith("no progress for ", StringComparison.Ordinal) && note.EndsWith(" min", StringComparison.Ordinal))
+            return $"已 {note["no progress for ".Length..^" min".Length]} 分钟无进展";
+        if (note.StartsWith("retrying ray tracing with fewer threads (", StringComparison.Ordinal) && note.EndsWith(')'))
+            return $"正使用更少线程重试光追编译（{note["retrying ray tracing with fewer threads (".Length..^1]}）";
+        if (note.StartsWith("paused while ", StringComparison.Ordinal) && note.EndsWith(" is running", StringComparison.Ordinal))
+            return $"{note["paused while ".Length..^" is running".Length]} 运行时暂停";
+        if (note.StartsWith("stopped while ", StringComparison.Ordinal) && note.Contains(" is running: continues when it exits", StringComparison.Ordinal))
+        {
+            var end = note.IndexOf(" is running: continues when it exits", StringComparison.Ordinal);
+            return $"{note["stopped while ".Length..end]} 运行时暂停，退出后继续" + note[(end + " is running: continues when it exits".Length)..];
+        }
+        var counts = Regex.Replace(note, @"([\d,]+) failed \(the driver rejected them\)", "$1 条失败（驱动拒绝）");
+        counts = Regex.Replace(counts, @"([\d,]+) skipped \(a shader not in this install\)", "$1 条跳过（当前游戏版本缺少着色器）");
+        counts = Regex.Replace(counts, @"([\d,]+) skipped \((?:it crashes|they crash) the GPU driver\)", "$1 条跳过（会使显卡驱动崩溃）");
+        if (counts != note) return counts.Replace(", ", "，", StringComparison.Ordinal);
+        if (note.StartsWith("driver changed:", StringComparison.Ordinal) || note.StartsWith("game updated", StringComparison.Ordinal)
+            || note.StartsWith("game shaders changed", StringComparison.Ordinal)) return StaleNote(note);
+        return note;
+    }
+
+    public static string QueueStageName(QueueStage stage) => stage switch
+    {
+        global::SCSKiller.Core.QueueStage.Waiting => "等待中", global::SCSKiller.Core.QueueStage.Indexing => "读取着色器", global::SCSKiller.Core.QueueStage.Planning => "生成计划",
+        global::SCSKiller.Core.QueueStage.Materializing => "准备文件", global::SCSKiller.Core.QueueStage.Warming => "编译中", global::SCSKiller.Core.QueueStage.Paused => "已暂停",
+        global::SCSKiller.Core.QueueStage.Done => "已完成", global::SCSKiller.Core.QueueStage.Failed => "失败", _ => "已停止",
+    };
+
+    public static string QueueProgress(QueueItem q)
+    {
+        if (q.Progress is not { } p) return "";
+        var counts = $"{p.Failed} 条失败" + (p.Skipped > 0 ? $"，{p.Skipped} 条跳过：当前版本缺少着色器" : "");
+        return $" {p.Done}/{p.Total}（{counts}）{p.PerSecond:0} 条/秒"
+            + (q.Stage is QueueStage.Done or QueueStage.Stopped or QueueStage.Warming && q.Note is { } note ? " - " + QueueNote(note) : "");
+    }
+
+    public static string NoStutterReason(string reason) => reason switch
+    {
+        "Its engine prepares shaders at startup" or "This game prepares its shaders itself" => "游戏会自行准备着色器，通常无需额外预编译",
+        "The driver doesn't use a compile's cache for this game" => "驱动不会在此游戏中使用提前编译得到的缓存",
+        "Its anti-cheat doesn't allow it" => "游戏反作弊不允许此项操作",
+        "Compiling crashes this game or the driver" => "提前编译会使游戏或显卡驱动崩溃",
+        "SCSKiller can't read this game's shaders yet" => "SCSKiller 暂时无法读取此游戏的着色器",
+        _ => reason,
+    };
 
     static string StaleNote(string r) =>
         r.StartsWith("driver changed:", StringComparison.Ordinal) ? $"驱动 {r[(r.LastIndexOf(' ') + 1)..]} 已清除缓存"

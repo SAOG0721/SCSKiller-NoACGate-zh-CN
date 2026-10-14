@@ -214,7 +214,7 @@ public class CommunityTests : IDisposable
         up = false;
         _clock.Now += TimeSpan.FromHours(5);
         Assert.NotNull((await community.ManifestAsync())!.Find(Game, null));
-        Assert.Contains("Can't reach", community.Problem);
+        Assert.Contains("无法连接上游社区数据库", community.Problem);
         var restarted = Make(new Fake(_ => throw new HttpRequestException(HttpRequestError.ConnectionError, "unreachable")));
         Assert.NotNull((await restarted.ManifestAsync())!.Find(Game, null));   // the copy on disk still answers after a restart
 
@@ -267,7 +267,7 @@ public class CommunityTests : IDisposable
         var offline = new Community(Path.Combine(_dir, "other"), (_, _) => Task.FromResult<string?>("t"), new RouteFailover(down, [Com, Io], _clock), _clock);
         for (var game = 0; game < 3; game++) Assert.Null(await offline.ManifestAsync());
         Assert.Equal(2, down.Log.Count);
-        Assert.Contains("Can't reach", offline.Problem);
+        Assert.Contains("无法连接上游社区数据库", offline.Problem);
     }
 
     /// <summary>A body that sends nothing after the headers, until cancelled. <see cref="Reading"/>: its first read began.</summary>
@@ -314,7 +314,7 @@ public class CommunityTests : IDisposable
         await body.Reading.Task.WaitAsync(TimeSpan.FromSeconds(10));
         clock.Advance(community.BodyIdle);   // the body's idle time, on the community's clock
         Assert.Null(await download.WaitAsync(TimeSpan.FromSeconds(10)));
-        Assert.Contains("didn't answer in time", community.Problem);
+        Assert.Contains("响应超时", community.Problem);
         Assert.Null(await community.DownloadAsync(entry, game));   // backing off: not asked again yet
         Assert.Single(fake.Log);
         Assert.False(File.Exists(Path.Combine(game, "community.db")));
@@ -380,7 +380,7 @@ public class CommunityTests : IDisposable
         var community = Make(fake);
 
         Assert.Null(await community.DownloadAsync(entry, game));
-        Assert.Contains("checksum", community.Problem);
+        Assert.Contains("校验失败", community.Problem);
         Assert.False(File.Exists(Path.Combine(game, "community.db")));
         Assert.Equal([$"GET https://api.test.com/v1/o/{entry.Object} Bearer t"], fake.Log);
 
@@ -416,7 +416,7 @@ public class CommunityTests : IDisposable
         quota = true;
         fake.Log.Clear();
         Assert.Null(await community.DownloadAsync(entry, Path.Combine(_dir, "g2")));
-        Assert.Contains("limit", community.Problem);
+        Assert.Contains("每日请求上限", community.Problem);
         Assert.Null(await community.DownloadAsync(entry, Path.Combine(_dir, "g2")));   // backing off: not asked again
         Assert.Single(fake.Log, l => l.Contains("Bearer old"));
         _clock.Now += TimeSpan.FromMinutes(11);
@@ -479,7 +479,7 @@ public class CommunityTests : IDisposable
         var community = Make(new Fake(_ => Ours(HttpStatusCode.OK, obj)));
 
         Assert.Null(await community.DownloadAsync(entry, game));
-        Assert.Contains("can't read was ignored", community.Problem);
+        Assert.Contains("无法读取社区录制数据", community.Problem);
         Assert.False(File.Exists(Path.Combine(game, "community.db")));
     }
 

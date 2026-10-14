@@ -48,7 +48,7 @@ static class Fmt
     public static Style Style(string key) => (Style)Application.Current.Resources[key];
     /// <summary>"Severe shader-compilation stutter: reason", then the source and when it was checked; null when not listed.</summary>
     public static string? StutterTip(GameState s) => s.KnownStutter is { } k
-        ? $"{(k.Severity == StutterSeverity.Severe ? "严重" : "中等")}着色器编译卡顿：{k.Reason}。\n来源：{k.Source}（核查于 {k.Date}）" : null;
+        ? $"{(k.Severity == StutterSeverity.Severe ? "严重" : "中等")}着色器编译卡顿：{k.Reason}。\n来源：{(k.Source == StutterList.OwnMeasurement ? "SCSKiller 实测" : k.Source)}（核查于 {k.Date}）" : null;
     /// <summary>Library sections, in list order. GOG, Ubisoft, Battle.net, PURPLE, HoYoPlay and Gaijin games are Store.Other: told apart by their id prefix.</summary>
     public static readonly string[] Stores = ["Steam", "Epic Games", "Xbox / Game Pass", "EA app", "GOG", "Ubisoft Connect", "Battle.net", "PURPLE", "HoYoPlay", "Gaijin", "其他", AddedByYou];
     public const string AddedByYou = "手动添加";
@@ -286,7 +286,7 @@ public sealed class GameRow(GameState s, bool queued = false, bool compiling = f
     public string? StutterTip => Fmt.StutterTip(s);
     /// <summary>On game-verdicts.json as no-stutter: compiling stays possible, but the bulk adds leave it out.</summary>
     public bool IsNoStutter => s.NoStutter != null;
-    public string? NoStutterTip => s.NoStutter;
+    public string? NoStutterTip => s.NoStutter is { } reason ? Format.NoStutterReason(reason) : null;
     // The first three, then "+N" with the rest in its tooltip. After the stutter chip only one more chip fits before the
     // Shaders column: several become "N upscalers".
     const int MaxTags = 3;
@@ -705,7 +705,7 @@ public sealed class DetailVm(string id) : Bindable
     public bool IsKnownStutter => s.KnownStutter != null;
     public string StutterReason => s.KnownStutter?.Reason ?? "";
     public bool IsNoStutter => s.NoStutter != null;
-    public string NoStutterReason => s.NoStutter ?? "";
+    public string NoStutterReason => s.NoStutter is { } reason ? Format.NoStutterReason(reason) : "";
     /// <summary>The source as a link when it's a URL; otherwise <see cref="StutterCitation"/> shows it as text.</summary>
     public Uri? StutterUri => Uri.TryCreate(s.KnownStutter?.Source, UriKind.Absolute, out var u) && u.Scheme is "http" or "https" ? u : null;
     public string StutterLinkText => StutterUri != null ? $"来源（{s.KnownStutter!.Date}）" : "";
@@ -1136,8 +1136,8 @@ public sealed class QueueVm : Bindable
             string stage = cur?.Stage switch
             {
                 QueueStage.Indexing => "正在读取着色器", QueueStage.Planning => "正在生成计划", QueueStage.Materializing => "正在准备文件",
-                QueueStage.Paused => cur.Note is { } n ? "已暂停：" + n : "已暂停",
-                QueueStage.Warming when cur.Note is { } n => "正在编译：" + n,   // stalled (ScsKiller.StalledNote)
+                QueueStage.Paused => cur.Note is { } n ? "已暂停：" + Format.QueueNote(n) : "已暂停",
+                QueueStage.Warming when cur.Note is { } n => "正在编译：" + Format.QueueNote(n),   // stalled (ScsKiller.StalledNote)
                 _ => "正在编译",
             };
             return cur?.Progress is { Total: > 0 } p
@@ -1221,10 +1221,10 @@ public sealed class QueueVm : Bindable
     static string NoteOf(QueueItem q, GameState? g) => q.Stage switch
     {
         QueueStage.Failed => "失败：" + q.Error,
-        QueueStage.Stopped when q.Progress is { } p => $"已停止于 {p.Done:N0} / {p.Total:N0}；重新加入队列可继续" + (q.Note is { } n ? " · " + n : ""),
+        QueueStage.Stopped when q.Progress is { } p => $"已停止于 {p.Done:N0} / {p.Total:N0}；重新加入队列可继续" + (q.Note is { } n ? " · " + Format.QueueNote(n) : ""),
         QueueStage.Stopped => "已停止",
-        QueueStage.Done => q.Note is { } n ? "完成 · " + n : "完成",
-        _ when q.Note != null => q.Note,
+        QueueStage.Done => q.Note is { } n ? "完成 · " + Format.QueueNote(n) : "完成",
+        _ when q.Note != null => Format.QueueNote(q.Note),
         _ => g?.Plan is { } plan ? $"{plan.Recorded + plan.Generated + plan.MiddlewareItems:N0} 条管线{(plan.D3D11Shaders > 0 ? $" + {plan.D3D11Shaders:N0} 个 DirectX 11 着色器" : "")}" : "将先生成编译计划",
     };
 

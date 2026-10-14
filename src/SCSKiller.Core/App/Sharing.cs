@@ -91,7 +91,7 @@ public sealed class Sharing
         catch (InvalidDataException e)   // e.g. no PSOs yet: not again until the recording changes
         {
             Community.Write(shared, last with { Stamp = stamp });
-            Problem = $"A recording has nothing to share ({e.Message}).";
+            Problem = $"录制数据中没有可分享的内容（{e.Message}）。";
             return null;
         }
         if (Shipped(gameDir, contentHash) is { } shipped)
@@ -104,14 +104,14 @@ public sealed class Sharing
         var sent = new List<string>();
         var (uploadId, psos, fresh) = ((string?)null, 0, 0);
         var chunks = HashOnly.Chunks(records, ChunkRecords, ChunkRaw, out var tooLarge);
-        if (tooLarge > 0) Problem = $"{tooLarge} ray tracing records are more than an upload may carry with what they build on ({ChunkRecords} records, {ChunkRaw >> 20} MB, {HashOnly.MaxStateObjectRefs} references): shared without them.";
+        if (tooLarge > 0) Problem = $"有 {tooLarge} 条光追记录连同依赖内容超过单次上传上限（{ChunkRecords} 条记录、{ChunkRaw >> 20} MB、{HashOnly.MaxStateObjectRefs} 个引用）；分享时已略过。";
         foreach (var whole in chunks)
         {
             // what a layer made, read again right before each payload: one learned during an earlier upload is left out too
             IReadOnlySet<string>? excludedNow;
             try { excludedNow = layerMade?.Invoke(); }
             catch (Recordings.IncompleteLayerList e) { Waiting = e.Message; return Stop(null); }
-            catch (Exception e) { return Stop($"What a layer made can't be read ({e.Message}): sharing waits."); }   // any failure: nothing more goes
+            catch (Exception e) { return Stop($"无法读取图层生成的内容（{e.Message}），已暂停分享。"); }   // any failure: nothing more goes
             List<PsoDb.Rec> chunk;
             try { chunk = excludedNow == null ? whole : HashOnly.Canonical(whole, local: true, out _, layerMade: excludedNow); }
             catch (InvalidDataException) { continue; }   // nothing left of it but root signatures
@@ -122,7 +122,7 @@ public sealed class Sharing
                 continue;
             }
             var body = HashOnly.Compress(chunk);
-            if (body.Length > MaxBody) return Stop($"A recording is too large to share ({body.Length >> 20} MB compressed, the limit is {MaxBody >> 20} MB).");
+            if (body.Length > MaxBody) return Stop($"录制数据过大，无法分享（压缩后 {body.Length >> 20} MB，上限 {MaxBody >> 20} MB）。");
             try
             {
                 var r = await PostAsync(body, meta(), ct);
@@ -144,7 +144,7 @@ public sealed class Sharing
                         sent.Add(id);
                         continue;
                     }
-                    var why = $"Sharing a recording was refused (error {(int)r.StatusCode}).";
+                    var why = $"上游社区数据库拒绝接收录制数据（{(int)r.StatusCode}）。";
                     if (r.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.RequestEntityTooLarge or HttpStatusCode.Forbidden)
                     {
                         Problem = why;
@@ -159,7 +159,7 @@ public sealed class Sharing
             catch (Exception e) when (!ct.IsCancellationRequested)
             {
                 backoffUntil = clock.GetUtcNow() + TimeSpan.FromMinutes(5);   // offline, or an answer this version can't read
-                return Stop(e is HttpRequestException or OperationCanceledException ? "Can't reach the community database to share a recording." : e.Message);
+                return Stop(e is HttpRequestException or OperationCanceledException ? "无法连接上游社区数据库以分享录制数据。" : e.Message);
             }
         }
         var got = uploadId is null ? last with { Stamp = stamp, Sent = [.. sent] } : new SharedRecording(stamp, clock.GetUtcNow(), uploadId, psos, fresh, [.. sent]);
@@ -218,7 +218,7 @@ public sealed class Sharing
                 var body = HashOnly.Compress(records);
                 if (body.Length > MaxBody)
                 {
-                    Problem = $"An upscaler pack is too large to share ({body.Length >> 20} MB compressed, the limit is {MaxBody >> 20} MB).";
+                    Problem = $"超分辨率共享包过大，无法分享（压缩后 {body.Length >> 20} MB，上限 {MaxBody >> 20} MB）。";
                     stamps[name] = stamp;
                     continue;
                 }
@@ -239,7 +239,7 @@ public sealed class Sharing
                         stamps[name] = stamp;
                         continue;
                     }
-                    Problem = $"Sharing an upscaler pack was refused (error {(int)r.StatusCode}).";
+                    Problem = $"上游社区数据库拒绝接收超分辨率共享包（{(int)r.StatusCode}）。";
                     if (r.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.RequestEntityTooLarge)
                     {
                         stamps[name] = stamp;   // refused for good: not again until it changes
@@ -254,7 +254,7 @@ public sealed class Sharing
         catch (Exception e) when (!ct.IsCancellationRequested)
         {
             backoffUntil = clock.GetUtcNow() + TimeSpan.FromMinutes(5);
-            Problem = e is HttpRequestException or OperationCanceledException ? "Can't reach the community database to share an upscaler pack." : e.Message;
+            Problem = e is HttpRequestException or OperationCanceledException ? "无法连接上游社区数据库以分享超分辨率共享包。" : e.Message;
         }
         finally { Community.Write(stampFile, stamps); }
         return done;
@@ -312,7 +312,7 @@ public sealed class Sharing
         if (!r.IsSuccessStatusCode)
         {
             BackOff(r);   // 3 registrations a day per IP
-            Problem = $"Couldn't register for sharing (error {(int)r.StatusCode}).";
+            Problem = $"无法向上游社区数据库注册分享设备（{(int)r.StatusCode}）。";
             return null;
         }
         var j = await r.Content.ReadFromJsonAsync<JsonElement>(ct);

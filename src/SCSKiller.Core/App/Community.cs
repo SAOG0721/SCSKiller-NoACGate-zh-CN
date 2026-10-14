@@ -193,13 +193,13 @@ public sealed class Community
                 var packed = await Body(r, (int)e.Size, ct);
                 if (packed == null || Convert.ToHexStringLower(SHA256.HashData(packed)) != e.Object)
                 {
-                    Problem = "A community recording didn't match its checksum and was ignored. It's downloaded again at the next scan.";
+                    Problem = "社区录制数据校验失败，已忽略；下次扫描时会重新下载。";
                     return null;
                 }
                 var raw = await Bounded(new BrotliStream(new MemoryStream(packed), CompressionMode.Decompress), MaxRaw, ct);
                 if (raw == null || Check(raw) is not { } psos)
                 {
-                    Problem = "A community recording this version can't read was ignored. An update of SCSKiller may fix it.";
+                    Problem = "此版本无法读取社区录制数据，已忽略；更新 SCSKiller 后可能解决。";
                     return null;
                 }
                 var got = new CommunityDownload(e.Object, e.ContentHash, psos, clock.GetUtcNow());
@@ -240,14 +240,14 @@ public sealed class Community
             var packed = await Body(r, (int)e.Size, ct);
             if (packed == null || Convert.ToHexStringLower(SHA256.HashData(packed)) != e.Object)
             {
-                Problem = "An upscaler pack didn't match its checksum and was ignored. It's downloaded again at the next scan.";
+                Problem = "超分辨率共享包校验失败，已忽略；下次扫描时会重新下载。";
                 return null;
             }
             MiddlewarePack pack;
             try { pack = MiddlewarePacks.FromShared(HashOnly.CheckPack(HashOnly.Canonical(HashOnly.Decompress(packed, MaxRaw), local: false, out _, HashOnly.MaxEntryStateObjectRefs, maxRecords: HashOnly.MaxEntryRecords)), dll, image, amd, e.Object, out _); }
             catch (InvalidDataException)
             {
-                Problem = "An upscaler pack this version can't read was ignored. An update of SCSKiller may fix it.";
+                Problem = "此版本无法读取超分辨率共享包，已忽略；更新 SCSKiller 后可能解决。";
                 return null;
             }
             pack.Write(shared.PathOf(dll.Vendor, dll.Name, image.ContentHash));
@@ -339,21 +339,21 @@ public sealed class Community
 
     static string Refused(HttpResponseMessage r) => r.StatusCode switch
     {
-        HttpStatusCode.Unauthorized => "The community database didn't accept this PC's sign-in. Refresh status or sign in again in Settings.",
-        HttpStatusCode.Forbidden => "Your Patreon membership doesn't include the community database right now.",
-        HttpStatusCode.TooManyRequests => "The community database's daily limit is reached. Downloads resume later by themselves.",
-        HttpStatusCode.ServiceUnavailable => "The community database is busy right now. Downloads resume later by themselves.",
-        >= HttpStatusCode.InternalServerError => $"The community database had a problem (error {(int)r.StatusCode}). It retries at the next scan.",
-        _ => $"The community database refused the request (error {(int)r.StatusCode}).",
+        HttpStatusCode.Unauthorized => "上游社区数据库未接受本机登录状态。请在设置中刷新会员状态或重新登录。",
+        HttpStatusCode.Forbidden => "当前 Patreon 会员权限不包含上游社区数据库。",
+        HttpStatusCode.TooManyRequests => "上游社区数据库已达到每日请求上限，稍后会自动恢复下载。",
+        HttpStatusCode.ServiceUnavailable => "上游社区数据库暂时繁忙，稍后会自动恢复下载。",
+        >= HttpStatusCode.InternalServerError => $"上游社区数据库发生错误（{(int)r.StatusCode}）；下次扫描时会重试。",
+        _ => $"上游社区数据库拒绝了请求（{(int)r.StatusCode}）。",
     };
 
     static string Plain(Exception e) => e switch
     {
-        HttpRequestException => "Can't reach the community database right now. Compiling works as usual from your own files.",
-        OperationCanceledException => "The community database didn't answer in time. It retries at the next scan.",
+        HttpRequestException => "目前无法连接上游社区数据库；仍可照常使用本机文件编译。",
+        OperationCanceledException => "上游社区数据库响应超时，下次扫描时会重试。",
         AccountException => e.Message,
-        InvalidDataException => "The community database sent a list this version can't read. An update of SCSKiller may fix it.",
-        _ => "The community database gave an answer this version doesn't understand. An update of SCSKiller may fix it.",
+        InvalidDataException => "上游社区数据库返回了此版本无法读取的清单；更新 SCSKiller 后可能解决。",
+        _ => "上游社区数据库返回了此版本无法解析的数据；更新 SCSKiller 后可能解决。",
     };
 
     internal static T? Read<T>(string path) where T : class

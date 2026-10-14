@@ -4,6 +4,7 @@ using System.Text.Json;
 using CUE4Parse.Compression;
 using SCSKiller.Core;
 using SCSKiller.Core.App;
+using SCSKiller.Core.Games;
 using SCSKiller.Core.Unreal;
 using SCSKiller.Core.Vendors;
 
@@ -201,7 +202,7 @@ async Task<int> Status(string? query)
           反作弊    {(g.AntiCheat == AntiCheat.None ? "未检测到" : AntiCheatName(g.AntiCheat))}
           着色器数  {g.ShaderCount?.ToString() ?? "-"}
           编译计划  {(g.Plan is { } p ? $"录制 {p.Recorded} + 生成 {p.Generated} + DirectX 11 着色器 {p.D3D11Shaders} + 中间件 {p.MiddlewareItems}；根签名 {p.RootSignatures}，规则已验证：{p.RootSigRuleVerified}" : "-")}
-          卡顿记录  {(g.KnownStutter is { } st ? $"已知卡顿（{StutterSeverityName(st.Severity)}）：{st.Reason}（{st.Source}，核查于 {st.Date}）" : g.NoStutter is { } ns ? $"无着色器卡顿：{ns}" : "-")}
+          卡顿记录  {(g.KnownStutter is { } st ? $"已知卡顿（{StutterSeverityName(st.Severity)}）：{st.Reason}（{(st.Source == StutterList.OwnMeasurement ? "SCSKiller 实测" : st.Source)}，核查于 {st.Date}）" : g.NoStutter is { } ns ? $"无着色器卡顿：{Format.NoStutterReason(ns)}" : "-")}
           中间件    {(g.Middleware is { Count: > 0 } mw ? MiddlewareLine(mw, true) : "-")}
           预计占用  {(g.EstimatedCacheBytes is { } est ? Format.Bytes(est) : "-")} 缓存；预计耗时 {Hms(g.EstimatedWarmTime)}
           谨慎模式  {CarefulLine(g.Careful)}
@@ -232,7 +233,7 @@ static void PrintQueueChanges(ScsKiller k)
             if (!stageChanged && DateTime.Now - lastPrint < TimeSpan.FromSeconds(2)) return;
             lastStage[q.GameId] = q.Stage;
             lastPrint = DateTime.Now;
-            Console.WriteLine($"{DateTime.Now:HH:mm:ss} {q.GameId} {q.Stage}{ScsKiller.ProgressText(q)}{(q.Error != null ? " - " + q.Error : "")}");
+            Console.WriteLine($"{DateTime.Now:HH:mm:ss} {q.GameId} {Format.QueueStageName(q.Stage)}{Format.QueueProgress(q)}{(q.Error != null ? " - " + q.Error : "")}");
         }
     };
 }
@@ -277,9 +278,10 @@ async Task<int> QueueShell()
                     var all = k.Queue;
                     var queue = all.Where(q => !q.PlanCheck).ToList();
                     for (int i = 0; i < queue.Count; i++)
-                        Console.WriteLine($"{i,3} {queue[i].Stage,-13} {queue[i].GameId}{(queue[i].Note is { } n ? "  (" + n + ")" : "")}");
+                        Console.WriteLine($"{i,3} {Format.QueueStageName(queue[i].Stage),-13} {queue[i].GameId}{(queue[i].Note is { } n ? "  (" + Format.QueueNote(n) + ")" : "")}");
                     Console.WriteLine(k.QueueRunning ? "队列运行中" : "队列未运行");
-                    if (ScsKiller.PlanCheckLine(all) is { } checks) Console.WriteLine(checks);
+                    if (all.Count(q => q.PlanCheck && q.Stage is not (QueueStage.Done or QueueStage.Failed or QueueStage.Stopped)) is var checking and > 0)
+                        Console.WriteLine($"正在检查 {checking} 款游戏是否有新内容可编译");
                     break;
                 case "add" when w.Length > 1: k.Enqueue(Id(w, 1, w.Length)); break;
                 case "remove" when w.Length > 1: k.Remove(Id(w, 1, w.Length)); break;
