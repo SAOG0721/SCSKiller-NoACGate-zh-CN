@@ -188,8 +188,8 @@ void logf(const char* fmt, ...) {  // also used by warm11.cpp
 // Admission, decided once at the first device (any path: D3D12CreateDevice, a device factory; D3D12GetInterface's hooks
 // only forward until then). The recorder records for the whole run only when all hold, else it is a pure pass-through
 // (no device hooked, nothing written):
-//  - scskiller-noac.armed has [scskiller] armed=1 and this process's exe as it was then: the app wrote it after a clean full
-//    anti-cheat check of the install and deletes it on any change there (GameFiles.DetectAntiCheat walks the install;
+//  - scskiller-noac.armed has [scskiller] armed=1 and this process's exe as it was then: the app wrote it after a full
+//    anti-cheat check of the install and, when one was found, the game's explicit recording choice. It deletes the file on a change there (GameFiles.DetectAntiCheat walks the install;
 //    this dll doesn't);
 //  - without allow_ac=1 in both attestations (a per-game UI opt-in), no anti-cheat marker in this folder:
 //    the built-in list, plus scskiller.ini markers= (it only adds; malformed: no);

@@ -5495,7 +5495,7 @@ public sealed partial class ScsKiller : IScsKiller
     internal static string ArmedText(string exe, string nonce)
     {
         var f = new FileInfo(exe);
-        return "[scskiller]\r\n; written by SCSKiller after a clean anti-cheat check of the install, deleted when it changes: "
+        return "[scskiller]\r\n; written by SCSKiller after checking this install and its per-game anti-cheat recording choice, deleted when it changes: "
             + $"the recorder records only while this says armed=1, its ledger entry has this nonce and the exe is as it was then\r\narmed=1\r\nchecked={DateTimeOffset.UtcNow:O}\r\n"
             + $"nonce={nonce}\r\nexe_size={f.Length}\r\nexe_time={f.LastWriteTimeUtc.ToFileTimeUtc()}\r\n";
     }
