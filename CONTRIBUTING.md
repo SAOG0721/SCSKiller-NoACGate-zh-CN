@@ -1,20 +1,14 @@
-# Contributing
+# 为 SCSKiller-NoACGate-zh-CN 贡献
 
-Bugs and game requests go in Issues, with the templates. Security problems go through [SECURITY.md](SECURITY.md), never
-a public issue.
+本 fork 仍在开发，GitHub Issues 目前未开放；请勿将本 fork 的错误或游戏请求提交到上游项目。功能进度见 [TODO.md](TODO.md)。安全问题见 [SECURITY.md](SECURITY.md)。
 
 ## Anti-cheat games
 
-SCSKiller never touches a game with anti-cheat beyond reading its files: no recorder, no injection, no opening its
-processes. The one exception is the offline session (ARCHITECTURE.md, Recorder), for the EasyAntiCheat games listed in
-`src/SCSKiller.Core/Games/offline-eac.json` only: opted into per game, confirmed per launch, started by SCSKiller and
-recorded in that process alone. Changes that widen it or work around the rule aren't accepted.
+本 fork 允许用户在详情页阅读风险提示后，逐游戏选择是否在检测到反作弊时尝试安装录制器。它不会关闭或绕过游戏的反作弊，也不保证代理能加载、游戏能运行或账号安全。此路径的变更应保留明确确认、默认关闭和撤销许可的行为，并分别报告源码测试与真实游戏验证结果。
 
 ## How pull requests are merged
 
-Pull requests are reviewed here in public. This repository is updated once per release, so an accepted PR is applied to
-the development tree with your authorship kept and ships in the next release. The release commit credits you with a
-`Co-authored-by` line, the changelog thanks you by handle, and the PR is closed with a link to that commit.
+提交 Pull Request 时请写明修改范围、验证方式和仍需手动确认的行为。本 fork 尚无正式发布版本，也不承诺 PR 的合并或发布时间。
 
 ## Sign-off (DCO)
 
