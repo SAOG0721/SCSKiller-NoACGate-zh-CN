@@ -4,6 +4,8 @@ All notable changes to the SCSKiller app and command line. Versions follow [Sema
 
 ## [Unreleased]
 
+## [1.2.5-noacgate.2] - 2026-10-16
+
 ### New
 
 - **Compiling for one of two GPUs now uses the card you name**, not the one with the most dedicated memory. Two cards
