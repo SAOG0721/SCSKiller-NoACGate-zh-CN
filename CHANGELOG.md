@@ -4,6 +4,39 @@ All notable changes to the SCSKiller app and command line. Versions follow [Sema
 
 ## [Unreleased]
 
+### New
+
+- **Compiling for one of two GPUs now uses the card you name**, not the one with the most dedicated memory. Two cards
+  of the same nominal size can report more than 100 MB apart: an RX 9070 reports 130 MiB more than a 4070 Ti SUPER, so
+  the compile landed on the card the user didn't mean, and there was no setting, no command line option, no
+  environment variable and nothing in the UI that could say otherwise. The settings page has a GPU list, the CLI has
+  `gpu` and `gpu use <id|auto>`, and `Settings.GpuChoice` holds the card as `vendor:device:subsystem` rather than a
+  LUID, which the OS reassigns on every boot. Auto keeps the old rule, and a chosen card that isn't in the machine
+  falls back to it. Restart SCSKiller after changing it: the vendor back-end, its driver cache, the warm executable
+  and the community package folder are all derived from the choice.
+
+### Recorder and anti-cheat
+
+- **An anti-cheat game that has a recording now compiles.** The library offered it as compilable, and every compile
+  then failed with "not ready: needs a recording, which its anti-cheat blocks". The unblock that applies once a
+  game's anti-cheat opt-in is on was only in the code that shows a game's status, not in the one a compile reads its
+  readiness from, so the two disagreed for exactly the case this fork exists for. Compiling such a game now replays
+  the pipelines its recording holds.
+- **A recording is imported while the game is still writing it.** The recorder holds `scskiller.db` open for the whole
+  session, and the import read that file in a way Windows refuses while a writer holds it: nothing was imported until
+  the game exited, so a compile started meanwhile planned from an older recording, and the command line reported
+  `could not import ...: being used by another process` on every pass. The import now opens the file the way the
+  recorder's own code opens its files. The file is still emptied only after the game has exited.
+
+### Games
+
+- **An anti-cheat game's finished compile is no longer called stale for not having run through the game's HDR mod.**
+  Starting the app reads every game before it publishes any of them, and the anti-cheat verdict was taken from that
+  not-yet-published list: with no entry there, SCSKiller treated the game as having no anti-cheat, found the ReShade
+  install beside it, and asked for a compile through a layer it deliberately never uses in such an install (Wuthering
+  Waves with ReShade and RenoDX). The verdict now comes from the scan's own cache, and a game the scan hasn't read
+  either is read from its files instead of being assumed clean.
+
 ## [1.2.5] - 2026-10-10
 
 ### Faster and steadier

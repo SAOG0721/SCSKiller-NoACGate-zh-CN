@@ -1452,6 +1452,29 @@ public partial class AppTests : IDisposable
         Assert.True(File.Exists(Path.Combine(_exeDir, "scskiller.db")));   // left as it is
     }
 
+    /// <summary>The running game's recorder holds the inbox (proxy.cpp: _wfsopen "ab" _SH_DENYWR, i.e. write access with
+    /// FILE_SHARE_READ), which a reader that shares only reads is refused on. The import read the inbox with
+    /// File.OpenRead, so a recording still being written was never taken: "could not import ...: being used by another
+    /// process", every scan, until the game exited. The emptying waits for the exit either way.</summary>
+    [Fact]
+    public async Task A_recording_imports_while_its_recorder_still_holds_the_inbox()
+    {
+        var k = Killer(new FakeReader(Unreal));
+        k.ProcessNames = () => new HashSet<string>();
+        var complained = false;
+        k.Log = new At("could not import", () => complained = true);
+        var inbox = Path.Combine(_exeDir, "scskiller.db");
+        using (var f = File.Create(inbox)) PsoDb.Write(f, 'C', PsoDb.Compute(PsoDb.Zero, new string('c', 40)));
+        var recorded = PsoDb.Read(inbox).Select(r => r.Key).ToList();
+        using var recorder = new FileStream(inbox, FileMode.Append, FileAccess.Write, FileShare.Read);   // the proxy's handle
+        await k.ScanAsync(default);
+        Assert.False(complained, "the import of a recording whose recorder holds its inbox");
+        var store = Path.Combine(k.Store.GameDir(_game.Id), "recording.db");
+        Assert.True(File.Exists(store), "the recording was imported while its recorder held the inbox");
+        Assert.Equal(recorded, PsoDb.Read(store).Select(r => r.Key));
+        Assert.Equal(recorded.Count, PsoDb.Read(inbox).Count());   // the recorder's yet: emptied once the game exits
+    }
+
     [Fact]
     public async Task Stopping_the_queue_returns_promptly_while_another_process_holds_the_recording_lock()
     {

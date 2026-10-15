@@ -359,7 +359,12 @@ public sealed record Settings(int Threads, WarmPriority Priority, DriverUpdateMo
     bool ScanAtStart = true,   // a scan the user didn't ask for reads every game again where it changed; off = the last list (ScsKiller.Listed)
     bool CloseQuits = false,  // the window's close button quits like the tray's Quit (WindowClose); off = it hides to the notification area
     bool RecordingLimitChosen = false,   // the user picked RecordingLimitMB: a stored 256 without it is the earlier default (ScsKiller.Settings)
-    bool TrayNoticeShown = false);   // the "still running" notification was shown (App.HideToTray): never again
+    bool TrayNoticeShown = false,   // the "still running" notification was shown (App.HideToTray): never again
+    string? GpuChoice = null);   // the adapter to compile for, GpuBackends.Id ("vendor:device:subsystem" in hex); null = the
+                                 // non-software adapter with the most dedicated VRAM (GpuBackends.Primary), which is also
+                                 // what scskiller_warm defaults to. A choice DXGI no longer lists falls back to that rule.
+                                 // Read once at start-up (ScsKiller.CreateDefault): the backend, its caches, the warm exe
+                                 // and the shared packs are all picked then, so a change needs a restart.
 
 public enum QueueStage { Waiting, Indexing, Planning, Materializing, Warming, Paused, Done, Failed, Stopped }
 public sealed record QueueItem(string GameId, QueueStage Stage, WarmProgress? Progress, string? Error,

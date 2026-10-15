@@ -59,6 +59,28 @@
                 </StackPanel>
             </Border>
 
+            <Border Style="{StaticResource Card}" Padding="20">
+                <StackPanel Spacing="12">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="编译使用的显卡" Style="{StaticResource Section}" />
+                        <TextBlock Text="{x:Bind Vm.GpuIntro}" Style="{StaticResource Secondary}" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="GpuLabel" Text="显卡" VerticalAlignment="Center" />
+                        <ComboBox Grid.Column="1" HorizontalAlignment="Left" MinWidth="360"
+                                  ItemsSource="{x:Bind Vm.GpuChoices}"
+                                  SelectedIndex="{x:Bind Vm.GpuIndex, Mode=TwoWay}"
+                                  AutomationProperties.LabeledBy="{x:Bind GpuLabel}" />
+                    </Grid>
+                    <InfoBar IsOpen="{x:Bind Vm.HasGpuNote, Mode=OneWay}" Visibility="{x:Bind Vm.HasGpuNote, Mode=OneWay}"
+                             Severity="{x:Bind Vm.GpuSeverity}" Message="{x:Bind Vm.GpuNote, Mode=OneWay}" IsClosable="False" />
+                </StackPanel>
+            </Border>
+
             <Grid ColumnSpacing="12" RowSpacing="12">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition />

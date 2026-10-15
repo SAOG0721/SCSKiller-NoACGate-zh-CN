@@ -114,9 +114,12 @@ public sealed partial class ScsKiller : IScsKiller
 
     public static ScsKiller CreateDefault()
     {
-        var vendor = GpuBackends.Detect();
+        var store = new AppStore(AppStore.DefaultDir);
+        // The saved GPU choice (Settings.GpuChoice) picks the adapter here, once: the backend, its caches, the warm exe and
+        // the shared packs all derive from it, so a change takes effect at the next start (the app says so in Settings).
+        var vendor = GpuBackends.Detect(store.LoadSettings().GpuChoice);
         var k = new ScsKiller([new SteamSource(), new EpicSource(), new XboxSource(), new GogSource(), new UbisoftSource(), new BattleNetSource(), new PurpleSource(), new HoYoPlaySource(), new EaSource(), new GaijinSource(),
-                new ManualSource(new AppStore(AppStore.DefaultDir))],
+                new ManualSource(store)],
             vendor, DefaultReaders(), new Planner(Path.Combine(AppStore.DefaultDir, "packs"), SharedPackDir(AppStore.DefaultDir, vendor.Vendor)), new Warmer(vendor),
             AppStore.DefaultDir, NativeTools.Find("d3d12.dll")) { Adapters = GpuBackends.Adapters };
         k.RedetectGpu();   // DriverId from DXGI before anything compares it
@@ -175,7 +178,7 @@ public sealed partial class ScsKiller : IScsKiller
                         _id = $"{(int)now.Gpu.Vendor:x4}:{now.DeviceId:x4}:{now.SubSysId:x8}:{now.Gpu.DriverVersion}";
                     if (_resolved && _id != null) _completeId = _id;
                 }
-                else if (Clock() - (_goneSince ??= Clock()) >= GpuGoneAfter && GpuBackends.Primary(all) is { } other)
+                else if (Clock() - (_goneSince ??= Clock()) >= GpuGoneAfter && GpuBackends.Primary(all, Settings.GpuChoice) is { } other)
                     GpuRestartNote = $"Restart SCSKiller to use {other.Name}";
                 if (GpuRestartNote == note && Vendor.Gpu == before && DriverId == id) return false;
             }
@@ -248,13 +251,22 @@ public sealed partial class ScsKiller : IScsKiller
         if (changed) Store.SaveDismissed(dismissed);
     }
 
-    /// <summary>Vendor's adapter in <paramref name="all"/>: the same LUID, or after a driver reload (a new LUID) the same
-    /// vendor, device and subsystem ids; the first time, the same vendor and name. Never just the primary one: on a PC with
-    /// two GPUs of a vendor, the other one isn't where the caches were compiled.</summary>
+    /// <summary>Vendor's adapter in <paramref name="all"/>: the adapter the saved choice names (<c>Settings.GpuChoice</c>),
+    /// else the same LUID, or after a driver reload (a new LUID) the same vendor, device and subsystem ids; the first time,
+    /// the same vendor and name. Never just the primary one: on a PC with two GPUs of a vendor, the other one isn't where
+    /// the caches were compiled.</summary>
     DxgiAdapter? Followed(IReadOnlyList<DxgiAdapter> all) =>
-        all.FirstOrDefault(a => a.Gpu.AdapterLuid == Vendor.Gpu.AdapterLuid)
+        SavedChoice(all)
+        ?? all.FirstOrDefault(a => a.Gpu.AdapterLuid == Vendor.Gpu.AdapterLuid)
         ?? all.FirstOrDefault(a => _known is { } k ? (a.Gpu.Vendor, a.DeviceId, a.SubSysId) == (k.Gpu.Vendor, k.DeviceId, k.SubSysId)
                                                    : (a.Gpu.Vendor, a.Gpu.Name) == (Vendor.Vendor, Vendor.Gpu.Name));
+
+    /// <summary>The adapter <c>Settings.GpuChoice</c> names, when DXGI lists it and it is the vendor the running backend was
+    /// built for: a choice switched to another vendor while the app runs isn't followed (nothing swaps a backend in place,
+    /// so the adapter is chosen at start-up and Settings says a restart is needed), and <see cref="Followed"/> falls back to
+    /// the LUID and driver-id match.</summary>
+    DxgiAdapter? SavedChoice(IReadOnlyList<DxgiAdapter> all) =>
+        GpuBackends.Chosen(all, Settings.GpuChoice) is { } c && c.Gpu.Vendor == Vendor.Vendor ? c : null;
 
     /// <summary>Background runs (scheduled re-warm, <c>compile --idle</c>): idle priority, Settings.BackgroundThreads, and
     /// pause while another discovered game is running if Settings.PauseWhileGaming (a warm always stops while its own
@@ -1262,7 +1274,8 @@ public sealed partial class ScsKiller : IScsKiller
     /// in the background (<see cref="RedetectInBackground"/>).</summary>
     Evaluation Evaluated(Game g, GameRecord rec, bool force, out bool fresh)
     {
-        var key = string.Join('|', ExeStamp(g), GameFiles.DirKey(g.InstallDir), g.Version, Vendor.Caps.Profile, rec.RecordingImportedAt?.UtcTicks, CoreBuild, CommunityInUse(g.Id)?.Object);
+        var key = string.Join('|', ExeStamp(g), GameFiles.DirKey(g.InstallDir), g.Version, Vendor.Caps.Profile, rec.RecordingImportedAt?.UtcTicks, CoreBuild, CommunityInUse(g.Id)?.Object,
+            rec.AntiCheatRecordingAllowed, rec.Recorder);   // the unblock below reads them; appended, so OnlyBuildDiffers' first six fields stay where they are
         Evaluation? hit = null;
         long started;
         lock (_scanLock)
@@ -1307,6 +1320,16 @@ public sealed partial class ScsKiller : IScsKiller
                 : CheckRecordings(g, engine);
         }
         catch (Exception e) { check = new(Readiness.Unsupported, e.Message); }
+        // State() unblocks a recording-only Unreal fork once this game's anti-cheat opt-in is on, but the warm reads this
+        // verdict instead (RunItem calls Evaluated, and the cached one in _scan), so without the same unblock here the
+        // library says "compilable" while every warm fails with "not ready: needs a recording, which its anti-cheat blocks".
+        if (engine is { Family: "Unreal", Unsupported: not null } && RootSig.PlannedOnlyFromARecording(engine.Fork)
+            && rec.AntiCheatRecordingAllowed && rec.Recorder == RecorderOverride.On)
+        {
+            engine = engine with { Unsupported = null };
+            check = File.Exists(RecordingPath(g.Id)) || CommunityInUse(g.Id) != null
+                ? CheckRecordings(g, engine) : new PlanCheck(Readiness.NeedsRecording, "needs a recording");
+        }
         var ev = Streamline(g, new Evaluation(key, engine, GameFiles.DetectAntiCheat(g), check));   // last: anti-cheat that appeared during Detect counts
         if (ev.AntiCheat != AntiCheat.None) AntiCheatFound(g, ev.AntiCheat, ev);
         else
@@ -2965,8 +2988,25 @@ public sealed partial class ScsKiller : IScsKiller
         return (ReShade.Stage(r, Path.Combine(workDir, "layer")), fp);
     }
 
-    /// <summary>What a warm through the game's layer depends on now (<see cref="ReShadeInstall.Fingerprint"/>); null = none.</summary>
-    string? LayerNow(Game g) => (Games.FirstOrDefault(s => s.Game.Id == g.Id)?.AntiCheat ?? AntiCheat.None) == AntiCheat.None ? ReShade.Detect(g)?.Fingerprint : null;
+    /// <summary>What a warm through the game's layer depends on now (<see cref="ReShadeInstall.Fingerprint"/>); null = none.
+    /// The anti-cheat verdict decides (<see cref="LayerFor"/> stages no layer in such an install), and it is read from
+    /// <see cref="VerdictNow"/>: a game the list doesn't hold yet read as <see cref="AntiCheat.None"/>, which found the
+    /// ReShade beside an anti-cheat game — the layer its warm deliberately didn't run through — as one it should have, and
+    /// called the finished compile stale all through <see cref="NotThroughLayerReason"/>.</summary>
+    string? LayerNow(Game g) => VerdictNow(g) == AntiCheat.None ? ReShade.Detect(g)?.Fingerprint : null;
+
+    /// <summary>The anti-cheat verdict a game's state is built from. The scan's cache first: <see cref="Evaluated"/> writes
+    /// it before the status is built, where <see cref="Games"/> still holds the previous scan's states — never this game's,
+    /// as a scan evaluates every game before it publishes any of them. Then the list's, and a game neither holds is read:
+    /// "not known yet" is not "no anti-cheat".</summary>
+    AntiCheat VerdictNow(Game g)
+    {
+        lock (_scanLock)
+            if (_scan?.GetValueOrDefault(g.Id)?.AntiCheat is { } scanned) return scanned;
+        lock (_lock)
+            if (_games.FirstOrDefault(s => s.Game.Id == g.Id)?.AntiCheat is { } listed) return listed;
+        return GameFiles.DetectAntiCheat(g);
+    }
 
     /// <summary>Null = compatible. Writability is only known by writing (Reconcile remembers a refusal), except WindowsApps.
     /// <paramref name="modSkip"/>: <see cref="ModSkip"/>.</summary>

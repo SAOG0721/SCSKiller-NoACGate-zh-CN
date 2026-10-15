@@ -1222,6 +1222,9 @@ public sealed class SettingsVm : Bindable
 
     public SettingsVm()
     {
+        // Both read the facade, so they can't be field initializers (a field initializer can't touch the instance).
+        gpuChoices = GpuChoiceList();
+        gpuIndex = Math.Max(0, Array.FindIndex(gpuChoices, c => string.Equals(c.Id, S.GpuChoice, StringComparison.OrdinalIgnoreCase)));
         cache = new(() =>
         {
             var usage = V.GetCacheUsage();
@@ -1289,6 +1292,50 @@ public sealed class SettingsVm : Bindable
         Changed();
         cache.Request();
     }
+
+    /// <summary>The adapter to compile for (<c>Settings.GpuChoice</c>): index 0 is the automatic rule — the non-software
+    /// adapter with the most dedicated VRAM, what scskiller_warm defaults to — then one entry per adapter DXGI lists.
+    /// A null id means "let <see cref="GpuBackends.Primary(IReadOnlyList{DxgiAdapter}, string?)"/> pick".</summary>
+    readonly (string Label, string? Id, long Luid)[] gpuChoices;   // set in the constructor
+    /// <summary>The saved choice's entry, 0 (automatic) when it names nothing DXGI lists any more.</summary>
+    int gpuIndex;
+
+    static (string Label, string? Id, long Luid)[] GpuChoiceList()
+    {
+        try
+        {
+            var all = GpuBackends.Adapters();
+            var auto = GpuBackends.Primary(all, null);
+            return [($"自动（显存最多的显卡：{auto?.Name ?? "无"}）", null, auto?.AdapterLuid ?? 0),
+                .. all.Select(a => ($"{a.Gpu.Name}（{GpuBackends.Id(a)} · {Format.Bytes((long)a.Gpu.DedicatedVideoMemory)}）",
+                    GpuBackends.Id(a), a.Gpu.AdapterLuid)).DistinctBy(c => c.Item2)];   // DXGI lists a repeated adapter twice (same ids)
+        }
+        catch (Exception) { return [("自动（显存最多的显卡）", null, 0)]; }   // no DXGI to enumerate (screenshots): the rule alone
+    }
+
+    public IReadOnlyList<string> GpuChoices => gpuChoices.Select(c => c.Label).ToArray();
+    public int GpuIndex
+    {
+        get => gpuIndex;
+        set
+        {
+            if (value < 0 || value >= gpuChoices.Length || value == gpuIndex) return;
+            gpuIndex = value;
+            S = S with { GpuChoice = gpuChoices[value].Id };   // ScsKiller.CreateDefault reads it: the next start uses it
+            Changed();   // the note below
+        }
+    }
+    public string GpuIntro => "SCSKiller 默认用“显存最多的显卡”编译着色器 —— 两块显存接近时它可能落在你并不想用的那块上。"
+        + "这里可以指定用哪一块：驱动缓存、预热进程和社区共享包都按所选显卡选择。"
+        + "所选显卡若被禁用或拔除，会自动回退到显存最多的那块。";
+    /// <summary>Set when a saved choice isn't the adapter this process is already compiling for: the adapter, its caches,
+    /// the warm exe and the shared packs are all picked at start-up (<see cref="ScsKiller.CreateDefault"/>), so a change
+    /// takes effect at the next start. Only the automatic rule's own pick is silent: nothing was overruled.</summary>
+    public string? GpuNote => S.GpuChoice is { Length: > 0 } && V.Gpu.AdapterLuid != gpuChoices[gpuIndex].Luid
+        ? $"将在下次启动 SCSKiller 时生效；本次编译仍用 {V.Gpu.Name}。"
+        : null;
+    public bool HasGpuNote => GpuNote != null;
+    public Microsoft.UI.Xaml.Controls.InfoBarSeverity GpuSeverity => Microsoft.UI.Xaml.Controls.InfoBarSeverity.Informational;
 
     public int DriverMode
     {
