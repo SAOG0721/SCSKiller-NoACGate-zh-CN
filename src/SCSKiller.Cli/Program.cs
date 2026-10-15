@@ -22,6 +22,8 @@ const string Usage = """
       cache get | cache set <GB|unlimited|default>
       cache clear <game> [--game-precache]        清理驱动和 Windows 的着色器缓存（先确认）；
                                                   --game-precache 还会清理游戏自己的预缓存
+      gpu                                         列出本机显卡，标出当前选用的那一块
+      gpu use <id|auto>                           指定编译所用的显卡（id 见上一条；auto = 显存最多的那块）
       nvidia-snapshot                             只读查看 NVIDIA 全局 DRS、自动着色器编译和空闲任务
       nvidia-auto-shader off|low|medium|high      设置 NVIDIA 自动着色器编译（需要管理员权限，先确认）
         （cache set / nvidia-auto-shader：--yes 跳过普通设置确认；--result <file> 输出 JSON；
@@ -65,6 +67,7 @@ try
         "queue" => await QueueShell(),
         "rewarm-stale" => await RewarmStale(args.Contains("--if-driver-changed")),
         "cache" => args.ElementAtOrDefault(1) == "clear" ? await CacheClear() : Cache(),
+        "gpu" => Gpu(),
         "record" => await Record(),
         "index" => await Index(),
         "rehydrate" => await RehydrateCommand(),
@@ -413,6 +416,47 @@ int Cache()
         var (id, raw, def) = nv.ReadCacheSetting();
         Console.WriteLine($"       设置 0x{id:X8} '{NvidiaBackend.CacheSizeSettingName}' = {(raw is { } r ? $"0x{r:X8}" : "未设置")}，驱动默认值 0x{def:X8}");
     }
+    return 0;
+}
+
+/// <summary>DXGI's adapters and which one a compile would target: the saved choice (<c>Settings.GpuChoice</c>, its
+/// <see cref="GpuBackends.Id"/>), else the non-software adapter with the most dedicated VRAM. <c>gpu use</c> saves that
+/// choice; <see cref="ScsKiller.CreateDefault"/> reads it, so the app needs a restart while the CLI and the scheduled
+/// task pick it up on their next run.</summary>
+int Gpu()
+{
+    var store = new AppStore(AppStore.DefaultDir);
+    var adapters = GpuBackends.Adapters();
+    if (args.ElementAtOrDefault(1) is "use" or "set")
+    {
+        var pick = args.ElementAtOrDefault(2) ?? throw new ArgumentException("用法：scskiller gpu use <id|auto>");
+        var hit = pick is "auto" or "default" ? null
+            : GpuBackends.Chosen(adapters, pick) ?? throw new ArgumentException($"本机没有 id 为“{pick}”的显卡（用 scskiller gpu 查看）");
+        store.SaveSettings(store.LoadSettings() with { GpuChoice = hit is null ? null : GpuBackends.Id(hit) });
+        Outcome.Message = hit is null ? "已改为自动选择（显存最多的显卡）。" : $"已指定 {hit.Gpu.Name}（{GpuBackends.Id(hit)}）。";
+        Console.WriteLine(Outcome.Message);
+        Console.WriteLine("注意：SCSKiller 正在运行时请在它的“设置”页里改，否则它下次保存设置会覆盖这里。");
+    }
+    if (adapters.Count == 0)
+    {
+        Console.WriteLine("没有检测到 DirectX 12 显卡：DXGI 没有列出任何非软件适配器。");
+        return 1;
+    }
+    var choice = store.LoadSettings().GpuChoice;
+    var chosen = GpuBackends.Chosen(adapters, choice);
+    var use = GpuBackends.Primary(adapters, choice)!;
+    Console.WriteLine(chosen is null
+        ? $"当前选用：{use.Name}（自动：显存最多的显卡）"
+        : $"当前选用：{use.Name}（已指定 {choice}）");
+    if (chosen is null && !string.IsNullOrEmpty(choice))
+        Console.WriteLine($"       注意：已指定的 {choice} 现在没有列出，本次回退到自动选择。");
+    Console.WriteLine("本机显卡：");
+    for (var i = 0; i < adapters.Count; i++)
+    {
+        var a = adapters[i];
+        Console.WriteLine($"  [{i}] {(a.Gpu.AdapterLuid == use.AdapterLuid ? "*" : " ")} {a.Gpu.Name}  id {GpuBackends.Id(a)}  LUID {a.Gpu.AdapterLuid:X16}  显存 {Format.Bytes((long)a.Gpu.DedicatedVideoMemory)}  驱动 {a.Gpu.DriverVersion}");
+    }
+    Console.WriteLine("用“gpu use <id>”指定要编译的显卡，“gpu use auto”恢复自动选择。");
     return 0;
 }
 

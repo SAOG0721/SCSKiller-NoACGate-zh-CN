@@ -4,10 +4,11 @@ namespace SCSKiller.Core.Vendors;
 
 public static class GpuBackends
 {
-    /// <summary>Backend for the primary discrete adapter. Adding a vendor = one case here.</summary>
-    public static IGpuVendorBackend Detect()
+    /// <summary>Backend for the chosen adapter, else the primary discrete one. Adding a vendor = one case here.
+    /// <paramref name="choice"/>: the <see cref="Id"/> of the adapter the user picked (Settings.GpuChoice); null = automatic.</summary>
+    public static IGpuVendorBackend Detect(string? choice = null)
     {
-        var gpu = PrimaryAdapter() ?? new GpuInfo(GpuVendor.Unknown, "no D3D adapter", "", 0, 0);
+        var gpu = PrimaryAdapter(choice) ?? new GpuInfo(GpuVendor.Unknown, "no D3D adapter", "", 0, 0);
         try
         {
             return gpu.Vendor switch
@@ -23,11 +24,25 @@ public static class GpuBackends
         }
     }
 
-    /// <summary>The non-software adapter with the most dedicated VRAM (what games render on), the same rule as
-    /// scskiller_warm. DriverVersion is the user-mode driver file version (vendor backends replace it).</summary>
-    public static GpuInfo? PrimaryAdapter() => Primary(Adapters());
+    /// <summary>The adapter to compile for: <paramref name="choice"/> (<see cref="Id"/>) when DXGI lists it now, else the
+    /// automatic rule. DriverVersion is the user-mode driver file version (vendor backends replace it).</summary>
+    public static GpuInfo? PrimaryAdapter(string? choice = null) => Primary(Adapters(), choice);
 
-    public static GpuInfo? Primary(IReadOnlyList<DxgiAdapter> adapters) => adapters.MaxBy(a => a.Gpu.DedicatedVideoMemory)?.Gpu;
+    /// <summary>The adapter <paramref name="choice"/> names, else the non-software one with the most dedicated VRAM (what
+    /// games render on), the same rule as scskiller_warm. A choice that isn't listed now (unplugged, disabled, its driver
+    /// removed) falls back to that rule, so a warm always has an adapter whatever the saved choice says.</summary>
+    public static GpuInfo? Primary(IReadOnlyList<DxgiAdapter> adapters, string? choice = null)
+        => Chosen(adapters, choice)?.Gpu ?? adapters.MaxBy(a => a.Gpu.DedicatedVideoMemory)?.Gpu;
+
+    /// <summary>The adapter a saved choice names, when DXGI lists it now: null without a choice, or when it is gone
+    /// (the caller falls back to the automatic rule, the same as <see cref="Primary(IReadOnlyList{DxgiAdapter}, string?)"/>).</summary>
+    public static DxgiAdapter? Chosen(IReadOnlyList<DxgiAdapter> adapters, string? choice)
+        => choice is { Length: > 0 } c ? adapters.FirstOrDefault(a => string.Equals(Id(a), c, StringComparison.OrdinalIgnoreCase)) : null;
+
+    /// <summary>An adapter's identity across boots and driver reloads, "vendor:device:subsystem" in hex, as
+    /// <see cref="ScsKiller.DriverId"/> spells its first three fields: this is what <c>Settings.GpuChoice</c> stores and
+    /// what <c>scskiller gpu</c> prints. The LUID is not: every boot assigns a new one.</summary>
+    public static string Id(DxgiAdapter a) => $"{(int)a.Gpu.Vendor:x4}:{a.DeviceId:x4}:{a.SubSysId:x8}";
 
     /// <summary>The non-software adapters, in DXGI's order.</summary>
     public static unsafe IReadOnlyList<DxgiAdapter> Adapters()

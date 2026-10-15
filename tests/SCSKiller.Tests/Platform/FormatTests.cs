@@ -224,6 +224,30 @@ public class FormatTests
         Assert.Equal(intel.Gpu, GpuBackends.Primary([intel]));
     }
 
+    /// <summary>Two 16 GB cards: an RX 9070 reports 130 MiB more dedicated VRAM than a 4070 Ti SUPER, so the rule that picks
+    /// what games render on lands on the AMD card. Settings.GpuChoice lets the user overrule that one line.</summary>
+    [Fact]
+    public void A_saved_gpu_choice_is_used_until_that_adapter_is_gone()
+    {
+        var amd = new DxgiAdapter(Gpu(GpuVendor.Amd, "AMD Radeon RX 9070", 16_977_985_536UL), 0x7550, 0x1002);
+        var nv = new DxgiAdapter(Gpu(GpuVendor.Nvidia, "NVIDIA GeForce RTX 4070 Ti SUPER", 16_841_179_136UL), 0x2705, 0x896D1043);
+        DxgiAdapter[] all = [amd, nv];
+        var choice = GpuBackends.Id(nv);
+
+        Assert.Equal("10de:2705:896d1043", choice);              // vendor, PCI device and subsystem ids (DriverId's first three)
+        Assert.Equal(amd.Gpu, GpuBackends.Primary(all));         // no choice: the most dedicated VRAM, as scskiller_warm does
+        Assert.Equal(nv.Gpu, GpuBackends.Primary(all, choice));  // the pick wins over that rule
+        Assert.Equal(nv.Gpu, GpuBackends.Primary(all, choice.ToUpperInvariant()));   // a hand-edited settings.json still matches
+        Assert.Null(GpuBackends.Chosen(all, null));
+        Assert.Equal(nv, GpuBackends.Chosen(all, choice));
+        Assert.Null(GpuBackends.Chosen(all, "10de:2684:00000000"));   // not this card
+
+        Assert.Equal(amd.Gpu, GpuBackends.Primary(all, GpuBackends.Id(amd)));
+        Assert.Equal(nv.Gpu, GpuBackends.Primary([nv], choice));
+        Assert.Equal(amd.Gpu, GpuBackends.Primary([amd], choice));   // unplugged or disabled: the automatic rule, never nothing
+        Assert.Null(AppStore.DefaultSettings.GpuChoice);
+    }
+
     /// <summary>The Library replaces a game's row whenever the game is evaluated again (a recorder update, a download), and
     /// rebuilds its sections when one moves: with the list's default add/remove animations, rows vanished and came back.</summary>
     [Fact]

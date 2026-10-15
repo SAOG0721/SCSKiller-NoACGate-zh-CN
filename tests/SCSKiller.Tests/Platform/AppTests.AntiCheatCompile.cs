@@ -74,6 +74,66 @@ public partial class AppTests
         Assert.False(s.ReasonFlags.HasFlag(GameReasonFlags.AntiCheatRecordingBlocked));
     }
 
+    /// <summary>The real <see cref="Planner.Check"/>'s first line: an engine verdict of its own stops the check before any
+    /// recording is looked at. A stand-in for Wuthering Waves, whose reader says its anti-cheat blocks the recording.</summary>
+    sealed class RecordingOnlyForkPlanner(bool recorded) : IPlanner
+    {
+        readonly UpdatedPlanner _inner = new(recorded: recorded);
+        public PlanCheck Check(Game game, EngineInfo engine, Recording? recording, VendorCaps caps) =>
+            engine.Unsupported != null ? new(Readiness.Unsupported, engine.Unsupported) : _inner.Check(game, engine, recording, caps);
+        public Plan Build(Game game, EngineInfo engine, ShaderIndex index, Recording? recording, VendorCaps caps, string outDir, IProgress<string>? log, CancellationToken ct, bool maximum = false) =>
+            _inner.Build(game, engine, index, recording, caps, outDir, log, ct, maximum);
+        public void Materialize(Plan plan, Game game, EngineInfo engine, IEngineReader reader, Recording? recording, string workDir, CancellationToken ct) =>
+            _inner.Materialize(plan, game, engine, reader, recording, workDir, ct);
+    }
+
+    /// <summary>Wuthering Waves opted in and recorded compiles, not only reads as compilable. The queue takes its verdict
+    /// from Evaluated, which the unblock State() adds never reaches: without it every warm fails with "not ready: needs a
+    /// recording, which its anti-cheat blocks" while the library offers the game as compilable.</summary>
+    [Fact]
+    public async Task An_opted_in_recording_only_Unreal_fork_with_a_recording_compiles()
+    {
+        Directory.CreateDirectory(Path.Combine(_game.InstallDir, "AntiCheatExpert"));
+        var engine = Unreal with { Fork = "GAME_WutheringWaves", Unsupported = "needs a recording, which its anti-cheat blocks" };
+        var k = Killer(new FakeReader(engine), new RecordingOnlyForkPlanner(recorded: true));
+        var rec = k.Store.LoadGame(_game.Id);
+        rec.AntiCheatRecordingAllowed = true;
+        rec.Recorder = RecorderOverride.On;
+        k.Store.SaveGame(_game.Id, rec);
+        WriteRecording(Path.Combine(k.Store.GameDir(_game.Id), "recording.db"));
+        Assert.Equal(GameStatus.Ready, (await k.ScanAsync(default)).Single().Status);   // what the library shows
+        await WarmOnce(k, _game.Id);                                                    // what the queue does about it
+        await k.RecordingMigration.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(GameStatus.Warmed, k.Games.Single().Status);
+    }
+
+    /// <summary>Read from a start (a fresh app's state), where a scan evaluates every game before it publishes any of them:
+    /// the list doesn't hold the game yet, and reading "no anti-cheat" from that absence found the ReShade install beside
+    /// an anti-cheat game — whose warm deliberately runs through no layer — as a layer it should have run through, and
+    /// called the finished compile stale with <see cref="ScsKiller.NotThroughLayerReason"/>.</summary>
+    [Fact]
+    public async Task A_warm_without_a_layer_in_an_anti_cheat_install_is_not_stale()
+    {
+        File.WriteAllBytes(Path.Combine(_exeDir, "dxgi.dll"), ReShadeDll);
+        File.WriteAllBytes(Path.Combine(_exeDir, "renodx-hitmanwoa.addon64"), RenoDxAddon);
+        var k = AntiCheatGame();
+        var rec = k.Store.LoadGame(_game.Id);
+        rec.AntiCheatRecordingAllowed = true;
+        rec.Recorder = RecorderOverride.On;
+        k.Store.SaveGame(_game.Id, rec);
+        WriteRecording(Path.Combine(k.Store.GameDir(_game.Id), "recording.db"));
+        await k.ScanAsync(default);
+        await WarmOnce(k, _game.Id);
+        await k.RecordingMigration.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(GameStatus.Warmed, k.Games.Single().Status);
+        Assert.Null(k.Store.LoadGame(_game.Id).WarmedLayer);   // an anti-cheat install: the warm stages no layer
+
+        var again = AntiCheatGame();
+        var s = (await again.ScanAsync(default)).Single();
+        Assert.NotEqual(ScsKiller.NotThroughLayerReason, s.StatusReason);
+        Assert.Equal(GameStatus.Warmed, s.Status);
+    }
+
     /// <summary>An EasyAntiCheat game an offline session can record (Games.OfflineEac), with no recording yet: "Needs an offline
     /// session", a NeedsRecording status with its own reason, the game page's action. With a recording it compiles as usual (below).</summary>
     [Fact]

@@ -31,11 +31,17 @@ public static partial class PsoDb
     public static readonly string Zero = new('0', 40);
     public static string Hex(ReadOnlySpan<byte> b) => Convert.ToHexStringLower(b);
 
+    /// <summary>A db opened for reading while its recorder may be writing it. proxy.cpp opens scskiller.db with _SH_DENYWR
+    /// (dwShareMode FILE_SHARE_READ, access GENERIC_WRITE), and Windows also checks the reader's own share mode against
+    /// that writer: File.OpenRead (FileShare.Read) is refused with "being used by another process" for as long as the game
+    /// runs, so every import of a recording the running game was still writing failed. The mode the proxy itself reads with.</summary>
+    static FileStream OpenRead(string path) => new(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+
     /// <summary>Every record in file order, of a proxy db or a <see cref="WriteCompact">compact</see> one; stops at a torn
     /// tail like the proxy does. A compact file that ends short of its recorded length throws InvalidDataException.</summary>
     public static IEnumerable<Rec> Read(string path)
     {
-        using var f = File.OpenRead(path);
+        using var f = OpenRead(path);
         var head = new byte[CompactHead];
         var n = f.ReadAtLeast(head, head.Length, false);
         if (!IsCompact(head.AsSpan(0, n)))
@@ -66,7 +72,7 @@ public static partial class PsoDb
 
     public static bool IsCompact(string path)
     {
-        using var f = File.OpenRead(path);
+        using var f = OpenRead(path);
         Span<byte> head = stackalloc byte[CompactMagic.Length];
         return IsCompact(head[..f.ReadAtLeast(head, head.Length, false)]);
     }
