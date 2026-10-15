@@ -54,9 +54,9 @@
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                     <Button Content="游戏目录…" Click="OnGameFolder" Visibility="{x:Bind Vm.IsManual, Mode=OneWay}"
-                            ToolTipService.ToolTip="The folder SCSKiller checks for anti-cheat before it records this game" />
+                            ToolTipService.ToolTip="SCSKiller 在录制前会检查此目录中的反作弊组件" />
                     <Button Content="从游戏库移除" Click="OnRemoveGame" Visibility="{x:Bind Vm.IsManual, Mode=OneWay}"
-                            ToolTipService.ToolTip="Forget this game. Its recorder leaves the game folder; the game's own files stay." />
+                            ToolTipService.ToolTip="从游戏库移除此游戏，并移除其目录中的录制器；游戏自身文件会保留。" />
                     <Grid Background="Transparent" ToolTipService.ToolTip="{x:Bind Vm.PlayTip, Mode=OneWay}" Visibility="{x:Bind Vm.ShowPlay, Mode=OneWay}">
                         <Button Content="{x:Bind Vm.PlayText, Mode=OneWay}" Click="{x:Bind Vm.Play}" IsEnabled="{x:Bind Vm.CanPlay, Mode=OneWay}" />
                     </Grid>
@@ -71,7 +71,7 @@
                 <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
                     <TextBlock Text="{x:Bind Vm.Name, Mode=OneWay}" Style="{StaticResource TitleTextBlockStyle}" TextWrapping="Wrap" />
                     <TextBlock Text="{x:Bind Vm.Sub, Mode=OneWay}" Style="{StaticResource Secondary}" TextWrapping="Wrap" />
-                    <TextBlock Text="● Playing now" Style="{StaticResource BodyStrongTextBlockStyle}" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                    <TextBlock Text="● 正在运行" Style="{StaticResource BodyStrongTextBlockStyle}" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
                                Visibility="{x:Bind Vm.Playing, Mode=OneWay}" />
                 </StackPanel>
             </Grid>

@@ -34,7 +34,7 @@
                     <TextBlock Text="编译队列" Style="{StaticResource TitleTextBlockStyle}" />
                     <TextBlock Text="{x:Bind Vm.Summary, Mode=OneWay}" Style="{StaticResource Secondary}" />
                     <TextBlock Text="{x:Bind Vm.PlanChecks, Mode=OneWay}" Visibility="{x:Bind Vm.HasPlanChecks, Mode=OneWay}" Style="{StaticResource Caption}"
-                               ToolTipService.ToolTip="After an update SCSKiller rebuilds the plans of compiled games in the background, without compiling. A game with more to compile shows it in the Library." />
+                               ToolTipService.ToolTip="更新后，SCSKiller 会在后台重新生成已编译游戏的计划，此过程不会进行编译。若有新增的可编译内容，会在游戏库中显示。" />
                     <TextBlock Text="编译在游戏外进行，但使用游戏的进程名。编译期间请保持游戏关闭。"
                                Style="{StaticResource Caption}" TextWrapping="Wrap" />
                 </StackPanel>
@@ -48,7 +48,7 @@
                     </Button>
                     <Button Content="{x:Bind Vm.PauseText, Mode=OneWay}" Click="OnPause" Visibility="{x:Bind Vm.HasCurrent, Mode=OneWay}" />
                     <Button Content="停止" Click="OnStop" Visibility="{x:Bind Vm.HasCurrent, Mode=OneWay}"
-                            ToolTipService.ToolTip="Finishes the compiles in flight, then stops. Add the game again to continue where it stopped." />
+                            ToolTipService.ToolTip="完成正在进行的编译后停止。重新加入游戏即可从中断处继续。" />
                 </StackPanel>
             </Grid>
 
@@ -117,7 +117,7 @@
                         <TextBlock Grid.Column="4" Text="{x:Bind Vm.Current.Time, Mode=OneWay}" TextAlignment="Right" VerticalAlignment="Center" />
                         <TextBlock Grid.Column="5" Text="{x:Bind Vm.Current.Cache, Mode=OneWay}" TextAlignment="Right" VerticalAlignment="Center" />
                         <Button Grid.Column="6" HorizontalAlignment="Right" Style="{StaticResource RowButton}" Click="OnRemoveCurrent"
-                                AutomationProperties.Name="{x:Bind Vm.Current.RemoveLabel, Mode=OneWay}" ToolTipService.ToolTip="Stop and remove">
+                                AutomationProperties.Name="{x:Bind Vm.Current.RemoveLabel, Mode=OneWay}" ToolTipService.ToolTip="停止并移除">
                             <FontIcon Glyph="&#xE711;" FontSize="14" />
                         </Button>
                         <ProgressBar Grid.Row="1" Grid.Column="3" Grid.ColumnSpan="3" Value="{x:Bind Vm.Percent, Mode=OneWay}"
@@ -139,7 +139,7 @@
                                         <ColumnDefinition Width="80" />
                                         <ColumnDefinition Width="216" />
                                     </Grid.ColumnDefinitions>
-                                    <FontIcon Glyph="&#xE76F;" FontSize="14" Foreground="{ThemeResource TextFillColorTertiaryBrush}" ToolTipService.ToolTip="Drag to reorder" />
+                                    <FontIcon Glyph="&#xE76F;" FontSize="14" Foreground="{ThemeResource TextFillColorTertiaryBrush}" ToolTipService.ToolTip="拖动以调整顺序" />
                                     <Border Grid.Column="1" Width="24" Height="24" CornerRadius="12" Background="{ThemeResource ControlFillColorSecondaryBrush}">
                                         <TextBlock Text="{x:Bind Number}" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                     </Border>
@@ -160,15 +160,15 @@
                                         <Button Content="移到顶部" Style="{StaticResource RowButton}" FontSize="13" IsEnabled="{x:Bind CanUp}" Click="OnTop"
                                                 AutomationProperties.Name="{x:Bind TopLabel}" />
                                         <Button Style="{StaticResource RowButton}" Padding="0" IsEnabled="{x:Bind CanUp}" Click="OnUp"
-                                                AutomationProperties.Name="{x:Bind UpLabel}" ToolTipService.ToolTip="Move up">
+                                                AutomationProperties.Name="{x:Bind UpLabel}" ToolTipService.ToolTip="上移">
                                             <FontIcon Glyph="&#xE70E;" FontSize="14" />
                                         </Button>
                                         <Button Style="{StaticResource RowButton}" Padding="0" IsEnabled="{x:Bind CanDown}" Click="OnDown"
-                                                AutomationProperties.Name="{x:Bind DownLabel}" ToolTipService.ToolTip="Move down">
+                                                AutomationProperties.Name="{x:Bind DownLabel}" ToolTipService.ToolTip="下移">
                                             <FontIcon Glyph="&#xE70D;" FontSize="14" />
                                         </Button>
                                         <Button Style="{StaticResource RowButton}" Padding="0" Click="OnRemove"
-                                                AutomationProperties.Name="{x:Bind RemoveLabel}" ToolTipService.ToolTip="Remove">
+                                                AutomationProperties.Name="{x:Bind RemoveLabel}" ToolTipService.ToolTip="移除">
                                             <FontIcon Glyph="&#xE711;" FontSize="14" />
                                         </Button>
                                     </StackPanel>
@@ -212,7 +212,7 @@
                                         <TextBlock Grid.Column="4" Text="{x:Bind Time}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextAlignment="Right" VerticalAlignment="Center" />
                                         <TextBlock Grid.Column="5" Text="{x:Bind Cache}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextAlignment="Right" VerticalAlignment="Center" />
                                         <Button Grid.Column="6" HorizontalAlignment="Right" Style="{StaticResource RowButton}" Padding="0" Click="OnRemove"
-                                                AutomationProperties.Name="{x:Bind RemoveLabel}" ToolTipService.ToolTip="Remove">
+                                                AutomationProperties.Name="{x:Bind RemoveLabel}" ToolTipService.ToolTip="移除">
                                             <FontIcon Glyph="&#xE711;" FontSize="14" />
                                         </Button>
                                     </Grid>

@@ -1,57 +1,7 @@
-# Code signing policy
+# 本分支的签名与更新状态
 
-> **SCSKiller-NoACGate-zh-CN fork 提示：**以下是上游项目的原有签名政策，不代表本 fork 已获得上游的签名资质、密钥或审核。本 fork 尚未发布安装包；发布前必须制定并验证独立的签名与更新信任链。
+`SCSKiller-NoACGate-zh-CN` 是非官方分支，不使用原项目的签名证书、安装包 ID 或自动更新密钥。
 
-## Status
+目前提供的便携 ZIP **未签名**，Windows 可能显示“未知发布者”。下载时请认准[本仓库的 Releases](https://github.com/SAOG0721/SCSKiller-NoACGate-zh-CN/releases)，并用同一版本附带的 `SHA256SUMS.txt` 核对文件。自动更新已关闭；新版本需要手动下载和完整解压。
 
-SCSKiller has applied for free code signing from the [SignPath Foundation](https://signpath.org). Until it's granted,
-releases are **unsigned** and Windows shows "Unknown publisher". Each release lists the SHA-256 of its downloads.
-
-## What is signed
-
-Only binaries built from this repository's source by its GitHub Actions release workflow, from a stable release tag
-(`vX.Y.Z`):
-
-- `SCSKiller.exe` (the app)
-- `cli\scskiller.exe` and `cli\scskillerw.exe` (the command line)
-- `native\scskiller_warm.exe` and `native\segheap\scskiller_warm.exe` (the compiler that runs outside the game)
-- `native\d3d12.dll` (the optional recorder)
-- `SCSKiller-Setup.exe` and `Update.exe` (Velopack)
-
-Upstream binaries and runtimes in the package (the .NET runtime, the Windows App SDK, Velopack's own components, AMD's
-`native\amd_ags_x64.dll`) aren't signed by this project. Alpha and beta builds aren't built here and aren't signed under
-this policy. Every signed file carries the product name `SCSKiller` and the release's version.
-
-## Roles
-
-| Role | Who |
-|---|---|
-| Author (commits to the source repository) | [the maintainer](https://github.com/BlueHeisenberg) |
-| Reviewer (reviews every external contribution before it's merged) | the maintainer |
-| Approver (approves each signing request) | the maintainer |
-
-Contributions are reviewed in public pull requests before they're merged ([CONTRIBUTING.md](CONTRIBUTING.md)). Every
-signing request is approved by hand. All members use multi-factor authentication on GitHub and SignPath.
-
-## Privacy
-
-SCSKiller sends nothing about you, your PC or your games unless you ask it to. It connects to:
-
-- the SCSKiller service (`api.scskiller.com`, fallback `api.scskiller.io`):
-  - for the welcome text, the list of games known to stutter and the community database's index (nothing about you is
-    sent)
-  - to sign in with Patreon
-  - for signed-in supporters, to download the community recordings of your games' builds, and on the alpha or beta
-    channel to check for those updates
-  - only with "Share my shader hashes" on, to upload your recordings' hash-only form (no shader code) under an
-    anonymous device not linked to your account
-- `dl.scskiller.io`, for alpha and beta updates
-- GitHub Releases, for stable updates
-- public GitHub-hosted sources, for a decompression library (Oodle) or an archive key a game needs, the first time it's
-  needed.
-
-Shaders and recordings stay on your PC unless you turn sharing on. Frame times always stay on your PC.
-
-## Reporting
-
-Report a signed binary you believe is malicious or misused through [SECURITY.md](SECURITY.md).
+如有独立签名和自动更新功能，将在相应版本的说明中明确写出。原项目的签名声明不适用于本分支。

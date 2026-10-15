@@ -20,7 +20,7 @@
 ## 2. 简体中文汉化
 
 - [ ] 按本 fork 的简体中文目标汉化可见文案，保持持久化状态、命令协议及日志标识稳定；如需双语切换再引入资源体系。
-- [ ] 主要 UI 的静态文案、常见动态状态、弹窗、托盘与通知已有汉化；已补齐 Core 状态的展示层说明、社区账户/缓存提示、详情页覆盖率与帧时间统计，以及内置的 22 条卡顿说明。本轮进一步汉化社区下载与匿名分享错误、编译队列阶段/常见说明和已知的“无需预编译”原因。假数据截图已确认详情页、反作弊选择页、设置页的窄窗口无明显截断；来自外部服务的未知文本及底层诊断原文仍可能保留原文。
+- [ ] 主要 UI 的静态文案、常见动态状态、弹窗、托盘与通知已有汉化；已补齐 Core 状态的展示层说明、社区账户/缓存提示、详情页覆盖率与帧时间统计，以及内置的 22 条卡顿说明。本轮进一步汉化社区下载与匿名分享错误、编译队列阶段/常见说明和已知的“无需预编译”原因，并补齐游戏库、详情页和编译队列遗漏的英文悬停提示与运行状态。假数据截图已确认详情页、反作弊选择页、设置页的窄窗口无明显截断；来自外部服务的未知文本及底层诊断原文仍可能保留原文。
 - [x] 影响行为的状态原因改用 `GameReasonFlags`：反作弊录制门禁、离线会话、缓存不可达、光追录制机会和新版计划器通知不再解析英文 `StatusReason`。`Format.ShortNote` 等显示层仍解析英文原始原因，待继续汉化。
 - [x] 已提供中文 `README.zh-CN.md`，保留上游版权、许可证和来源。
 - [x] CLI 帮助、常见输出及 `record anti-cheat <game> on|off` 已汉化；启用命令始终要求手动确认风险。
@@ -33,8 +33,8 @@
 - [x] 首次欢迎内容改为内置中文 fork 说明，避免上游远程欢迎文案覆盖风险提示；向上游发送匿名活跃检查改为默认关闭，设置页说明发送去向。关于页的源码链接直接打开本 fork 的 GitHub，不再把 Patreon 令牌发往 GitHub。
 - [ ] 首次发布前配置本 fork 自己的更新签名与版本渠道，并审查仍指向上游服务的社区分享/内容入口。
 - [x] 窗口标题已标明 NoACGate 中文版。
-- [ ] 便携版目录、ZIP、CI 附件和草稿 Release 标题的 fork 命名已在本地代码中保持一致。源码改动已推送至 fork 分支 `176bc46`；当前本地与远端的文件差异仅有 `.github/workflows/build.yml` 和 `release.yml`。GitHub Actions 文件目前只能本地提交：命令行凭据缺少 `workflow` 权限，GitHub 连接器更新工作流也返回 403。取得相应权限后推送本地工作流提交，再按实际 tag 验证 CI。
-- [ ] 首次发布前确定独立的 Velopack 安装包 ID、版本起点、签名密钥和中文发布说明；验证不会覆盖原版安装。
+- [ ] 便携版目录、ZIP、发布标题使用 fork 名称。GitHub Actions 工作流改动因凭据缺少 `workflow` 权限仍留本地，不作为首个便携预览版的发布通道；以后使用 CI 发布时再处理权限和标签验证。
+- [ ] 首个便携预览版采用独立版本号 `v1.2.5-noacgate.1`，未签名且不启用自动更新。Velopack 安装包 ID、独立签名密钥、更新渠道及与原版安装程序的共存验证属于将来提供安装版的任务。
 
 ## 4. 上游链接与自动联网入口（补充）
 
@@ -49,7 +49,8 @@
 - [x] .NET 10 SDK 已安装在用户目录；Core、WinUI App 和原生代理已构建通过。新增的核心测试通过；隔离 WARP 测试目录中，默认模式不录制，明确许可后生成录制数据。
 - [x] 在隔离测试目录验证安装、撤销、文件变化、与原版代理标记/外来 `d3d12.dll` 的共存行为；假数据截图验证中文 UI。原版代理模拟文件不会被本 fork 认作自己的录制器，已有外来 DLL 不被覆盖；新旧两份本地分发目录可分别保留、回退。此项是合成验证，不代表与实际原版程序同时运行或真实游戏验收。
 - [ ] 实际游戏中是否加载代理、是否录到着色器、反作弊是否阻止/处罚，必须由用户在自愿承担风险的测试环境中单独验收。
-- [x] **本机部署分发版本。**`build/publish.ps1 -NoOodle` 已生成自包含便携 ZIP；当前开发版本为 `0.0.0-internal.0+c851b5a`。独立部署目录原先不存在，因此无需覆盖或迁移。用 `--screenshots` 假数据模式从部署目录启动，不在真实游戏目录安装录制器。旧版 `77db4b2`、`3668dd2`、`5f1be07` 的部署目录与 ZIP 另行保留作回退；详细记录见下方及各部署目录中的 `deployment-receipt.json`。
+- [x] **本机部署分发版本。**按用户最终选择，`build/publish.ps1 -NoOodle -FrameworkDependent` 已生成不含 .NET / Windows App SDK 运行时的本机精简 ZIP；当前开发版本为 `0.0.0-internal.0+2f8b817`。它依赖目标电脑已安装 x64 .NET Runtime 10 和 Windows App SDK Runtime 2.5.1，要求写在包内 `RUNTIME-REQUIREMENTS.txt`。当前 ZIP、解压目录及固定部署目录已核对；固定部署版 CLI 与 WinUI 假数据截图均退出码 0。未在真实游戏目录安装录制器。
+- [ ] **清理旧本地副本。** 用户已授权移除旧版 fork 部署目录和 ZIP。自动审批先后拒绝了批量递归删除、单个旧部署目录的递归删除，以及工作区内单个旧 ZIP 的删除，均只返回 `blocked by policy`；因此目前没有删除任何旧副本。待人工清理的对象仅限 `%LOCALAPPDATA%\Codex\Deployments\SCSKiller-NoACGate-zh-CN-{77db4b2,3668dd2,5f1be07,c851b5a,155251f}`、`dist\archive` 内的旧版 ZIP / 解压目录，以及 `dist\probe-framework` 和 `dist\candidate-*` 临时构建目录；保留固定部署目录、当前 `dist\SCSKiller-NoACGate-zh-CN` 及同名 ZIP、Git 仓库和 `I:` 盘原版。
 
 ### 当前验证记录（2026-10-15）
 
@@ -66,9 +67,25 @@
 - 上一条 `77db4b2` ZIP 已移至 `dist\archive\SCSKiller-NoACGate-zh-CN-77db4b2.zip` 并复核原 SHA-256，原部署目录保留。新一轮社区、分享和队列汉化：相关 62 项定向测试中 61 项通过，唯一失败为中文标点断言，修复后该项定向重跑通过；WinUI、CLI Release 均构建通过。
 - 上一版 `3668dd2` ZIP 已移至 `dist\archive\SCSKiller-NoACGate-zh-CN-3668dd2.zip`，SHA-256 `2b292e03fe7a7388387960f6f5c2a803691f0032c2112c0c2bc17effea76d956`；该部署目录仍保留。
 - 上一版 `5f1be07` ZIP 已移至 `dist\archive\SCSKiller-NoACGate-zh-CN-5f1be07.zip`，SHA-256 `05b60dd5e18f19a2e73fbe48ef2f0e3c3370cab205a8b73d2f2259a54aab7d4f`；部署目录仍保留。
-- 当前分发包：`dist\SCSKiller-NoACGate-zh-CN.zip`，SHA-256 `48e50049ff29f6917d9f1674cffa8f10899d276ea30b9792104a2ae04f784313`，727 个文件，无 Oodle DLL；部署目录 `%LOCALAPPDATA%\Codex\Deployments\SCSKiller-NoACGate-zh-CN-c851b5a\SCSKiller-NoACGate-zh-CN`。ZIP 与部署目录的文件名集合及 9 个关键文件哈希一致。从该目录运行 `--screenshots` 假数据模式退出码 0，生成 229 张截图；已检查反作弊录制卡片和关于页，没有明显截断，关于页显示 fork 名称及自动更新暂停。CLI `--help` 显示中文。交付记录在部署根目录的 `deployment-receipt.json`。回退时关闭本 fork，核实绝对路径后仅移除新目录；旧版部署目录和 ZIP 均保留。真实游戏中的加载、录制和反作弊结果仍待用户单独验收。
+- 之前的自包含包 `c851b5a`：`dist\archive\SCSKiller-NoACGate-zh-CN-c851b5a.zip`，SHA-256 `48e50049ff29f6917d9f1674cffa8f10899d276ea30b9792104a2ae04f784313`，727 个文件，无 Oodle DLL；部署目录 `%LOCALAPPDATA%\Codex\Deployments\SCSKiller-NoACGate-zh-CN-c851b5a\SCSKiller-NoACGate-zh-CN`。当时 ZIP 与部署目录的文件名集合及 9 个关键文件哈希一致，`--screenshots` 假数据模式退出码 0，生成 229 张截图，CLI `--help` 显示中文。该旧包仍在，待人工清理。
 - 录制器文案补漏：GUI/CLI 共用中文安装限制与排队状态，OptiScaler 串接限制和未确认反作弊风险时的拒绝提示已汉化。相关 28 项定向测试及 WinUI、CLI 构建通过。
 - 本轮复核代理 `admitted()` 与核心层 `SetAntiCheatRecording`、安装复查、撤销路径；两处 `allow_ac=1` 匹配后才跳过代理自身的反作弊拒绝检查。隔离目录中 15 项针对原版标记、外来 DLL、逐游戏许可、撤销和文件变化的测试通过。修正了源码与准入文件中仍称“无反作弊检查”的过时注释；功能路径未变。
+- 2026-10-15 参考 `I:\GameTweakTools\SCSKiller-1.2.5-Portable\current` 盘点：原版 `current` 有 723 个文件、约 282 MiB，先前本 fork 自包含版有 727 个文件、约 283 MiB。该原版安装目录还含用户数据、Velopack 更新程序及一份已有的本地 `native\segheap\d3d12.dll` 修复，不应直接照搬。自包含版 GUI 和 CLI 有 220 个字节相同的文件，CLI 这份在 ZIP 中约 41.4 MiB；直接删除会破坏运行。单独省去 PDB 与 `createdump.exe` 仅约 0.55 MiB ZIP。本机已有 .NET 10.0.6 x64 与 Windows App SDK Runtime 2.5.1 x64，所以采用独立的依赖系统运行时构建，而非从自包含包手工删 DLL。
+- 当前本机精简包 `2f8b817`：`dist\SCSKiller-NoACGate-zh-CN.zip`，SHA-256 `2870adfcbac708b4ee1b1d47d75b3f3cfe9f6632cdc6bdcbd3ca6b611dba8198`，约 25 MiB、119 个文件；无 .NET / Windows App SDK 运行时文件、PDB 或 Oodle DLL。`dist\SCSKiller-NoACGate-zh-CN` 和固定部署目录 `%LOCALAPPDATA%\Codex\Deployments\SCSKiller-NoACGate-zh-CN\SCSKiller-NoACGate-zh-CN` 的文件名集合及 10 个关键文件哈希一致。候选目录及固定部署目录的 WinUI `--screenshots` 假数据模式均退出码 0，各生成 229 张 PNG；固定部署版 CLI `--help` 退出码 0。交付记录在固定部署根目录的 `deployment-receipt.json`。真实游戏中的加载、录制与反作弊结果仍待用户单独验收。
+
+## 6. 本地最小 Release 分发包（2026-10-15）
+
+- [x] 从已验证的 `2f8b817` Release 配置、本机运行时依赖版生成 `dist\SCSKiller-NoACGate-zh-CN-local-Release-minimal.zip`：25,600,349 字节、116 个文件，SHA-256 `31a1cba2808ea6365445d8c0dba67db36ace98e9354811e04b592c44fdfbd9cf`。这是未签名、未发布 GitHub 的本地分发包；内嵌版本仍为 `0.0.0-internal.0+2f8b817`。相邻的 `.receipt.json` 记录包内容和验证结果。
+- [x] 仅排除 `Microsoft.Web.WebView2.Core.dll`、`Microsoft.Web.WebView2.Core.Projection.dll`、`WebView2Loader.dll`，相对 119 文件版节省约 0.52 MiB ZIP。源码没有内嵌 WebView 控件，Patreon 登录通过系统浏览器；不过 `Microsoft.WinUI.dll` 静态引用 WebView2 投影，因此这项裁剪只对当前功能和测试过的路径成立。独立解压后，WinUI 假数据全页截图退出码 0、生成 229 张 PNG，CLI `--help` 退出码 0；10 个关键文件与 119 文件版哈希一致。没有实测在线登录、真实游戏或未来新增 WebView 控件。
+- [ ] 打包脚本现已提供 `-NoWebView`，首个便携预览包需从准确源码提交重新构建并复核清单、启动与 CLI。公开发布前，仍需人工审核 Draft；实机游戏与在线登录的结果不能由现有隔离测试代替。
+
+## 7. 首个预览版 Draft 准备
+
+- [x] 默认 README 改为面向用户的中文说明，签名状态不再沿用上游政策；原版赞助入口从 fork 仓库移除。
+- [x] `docs/RELEASE_NOTES_v1.2.5-noacgate.1.md` 提供面向用户的中英双语发布说明、前置运行时、安装步骤和反作弊风险。
+- [ ] 用 `-NoOodle -FrameworkDependent -NoWebView -Version 1.2.5-noacgate.1` 从干净提交生成可复现 ZIP，核对包内源码提交、版本、文件哈希与启动结果。
+- [ ] 将不含 `.github/workflows` 改动的源码同步到 fork 默认分支；创建 Draft + Pre-release，上传主 ZIP 和校验文件，人工审核前不发布。
+- 手动清理建议：新 ZIP 已不含上述 3 个二进制文件；如果保留之前解压的 119 文件版而希望手动裁剪，只针对该版顶层的这 3 个文件。`notices\WebView2-NOTICE.txt` 和第三方声明保留。较旧的 fork 部署目录、旧 ZIP、旧解压目录及临时构建目录见第 5 节的待清理条目；在决定是否保留完整包作回退前，先不要删除当前固定部署目录或 `I:` 盘原版。
 
 ## 已确认的源码入口
 

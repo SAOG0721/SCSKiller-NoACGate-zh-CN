@@ -1,0 +1,15 @@
+SCSKiller-NoACGate-zh-CN 精简便携版（Windows x64）
+
+此 ZIP 不包含 .NET 和 Windows App SDK 运行时。运行前，目标电脑须已安装：
+- Windows 10 版本 2004（内部版本 19041）或更高，x64；
+- Microsoft .NET Runtime 10，x64（Microsoft.NETCore.App 10.0.0 或更高补丁版本）；
+- Windows App SDK Runtime 2.5.1 或更新的兼容版本，x64。
+
+官方下载入口：
+- .NET 10：https://dotnet.microsoft.com/download/dotnet/10.0
+- Windows App SDK Runtime：https://learn.microsoft.com/windows/apps/windows-app-sdk/downloads
+
+不满足前置条件时，请先安装相应运行时；不能通过从其他版本的 ZIP 中删除或拼接 DLL 来替代。
+本包不包含 Oodle DLL；需要读取相关游戏档案时，程序会下载所需组件。
+本包也不包含 WebView2 的三个二进制文件；账户登录使用系统浏览器。若将来程序增加内嵌网页功能，可能需要更新分发包。
+自动更新仍然停用。录制器对检测到反作弊的游戏默认关闭，须在阅读风险说明后逐游戏确认。

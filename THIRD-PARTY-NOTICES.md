@@ -1,6 +1,6 @@
 ﻿# Third-party notices
 
-SCSKiller ships, downloads or embeds the components below, at the versions in the distribution. Each row names its licence (SPDX id) and links to its text below, where identical texts are listed once.
+SCSKiller ships, downloads, embeds or requires the components below. Conditional runtime dependencies depend on the build profile. Each row names its licence (SPDX id) and links to its text below, where identical texts are listed once.
 
 SCSKiller's own licence: GPL-3.0-or-later (LICENSE), with an additional permission under section 7 for Oodle, the Windows App SDK and graphics driver libraries (LICENSE-EXCEPTION.txt).
 
@@ -8,7 +8,7 @@ SCSKiller's own licence: GPL-3.0-or-later (LICENSE), with an additional permissi
 
 | Component | Version | Licence | Copyright | Project | Text |
 |---|---|---|---|---|---|
-| .NET runtime (self-contained) | 10.0.12 | MIT | Copyright (c) .NET Foundation and Contributors | https://github.com/dotnet/runtime | [L1](#l1) |
+| .NET runtime (self-contained builds only) | 10.0 (build-specific patch) | MIT | Copyright (c) .NET Foundation and Contributors | https://github.com/dotnet/runtime | [L1](#l1) |
 | Microsoft.Bcl.Memory | 10.0.12 | MIT | © Microsoft Corporation | https://github.com/dotnet/runtime | [L1](#l1) |
 | System.IO.Hashing | 10.0.8 | MIT | © Microsoft Corporation | https://github.com/dotnet/runtime | [L1](#l1) |
 | System.Numerics.Tensors | 10.0.10 | MIT | © Microsoft Corporation | https://github.com/dotnet/runtime | [L1](#l1) |
@@ -50,9 +50,9 @@ SCSKiller's own licence: GPL-3.0-or-later (LICENSE), with an additional permissi
 
 ### Notes
 
-- **.NET runtime (self-contained)**: Its own third-party notices ship as notices\dotnet-THIRD-PARTY-NOTICES.txt.
-- **Windows App SDK (Runtime 2.5.1, WinUI 2.3.9, Foundation 2.3.12, Base 2.0.4, Interactive Experiences 2.1.9)**: Its notices ship as notices\WindowsAppSDK-NOTICE.txt and notices\WinUI-NOTICE.txt.
-- **Microsoft Edge WebView2 SDK**: Its notices ship as notices\WebView2-NOTICE.txt.
+- **.NET runtime**: Self-contained builds include it and ship notices\dotnet-THIRD-PARTY-NOTICES.txt. Framework-dependent ZIPs omit the runtime and require Microsoft.NETCore.App 10 x64 on the target PC.
+- **Windows App SDK (Runtime 2.5.1, WinUI 2.3.9, Foundation 2.3.12, Base 2.0.4, Interactive Experiences 2.1.9)**: Self-contained builds include the runtime; framework-dependent ZIPs require Windows App SDK Runtime 2.5.1 x64 on the target PC. Its notices ship as notices\WindowsAppSDK-NOTICE.txt and notices\WinUI-NOTICE.txt.
+- **Microsoft Edge WebView2 SDK**: The minimal framework-dependent ZIP omits its three binaries. Other build profiles may include them. Its notices ship as notices\WebView2-NOTICE.txt.
 - **Microsoft.Windows.SDK.NET (C#/WinRT projection, WinRT.Runtime)**: Part of the .NET SDK's Windows targeting pack. The package has no licence file. Its terms are at https://aka.ms/WinSDKLicenseURL.
 - **CommunityToolkit.HighPerformance**: Its notices ship as notices\CommunityToolkit-ThirdPartyNotices.txt.
 - **zlib-ng (zlib-ng2.dll)**: Native codec next to both exes, from the Zlib-ng.NET release assets, checked against a pinned SHA-256.
@@ -70,7 +70,7 @@ SCSKiller's own licence: GPL-3.0-or-later (LICENSE), with an additional permissi
 
 ### L1
 
-Used by: .NET runtime (self-contained), Microsoft.Bcl.Memory, System.IO.Hashing, System.Numerics.Tensors
+Used by: .NET runtime (when bundled), Microsoft.Bcl.Memory, System.IO.Hashing, System.Numerics.Tensors
 
 ```text
 The MIT License (MIT)
