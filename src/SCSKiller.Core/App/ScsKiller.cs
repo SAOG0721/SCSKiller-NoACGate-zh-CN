@@ -251,22 +251,13 @@ public sealed partial class ScsKiller : IScsKiller
         if (changed) Store.SaveDismissed(dismissed);
     }
 
-    /// <summary>Vendor's adapter in <paramref name="all"/>: the adapter the saved choice names (<c>Settings.GpuChoice</c>),
-    /// else the same LUID, or after a driver reload (a new LUID) the same vendor, device and subsystem ids; the first time,
-    /// the same vendor and name. Never just the primary one: on a PC with two GPUs of a vendor, the other one isn't where
-    /// the caches were compiled.</summary>
+    /// <summary>Follow the adapter chosen at startup: the same LUID, or after a driver reload the same vendor, device and
+    /// subsystem ids; the first time, the same vendor and name. A saved choice changed while running applies only at the
+    /// next start, even when both adapters have the same vendor.</summary>
     DxgiAdapter? Followed(IReadOnlyList<DxgiAdapter> all) =>
-        SavedChoice(all)
-        ?? all.FirstOrDefault(a => a.Gpu.AdapterLuid == Vendor.Gpu.AdapterLuid)
+        all.FirstOrDefault(a => a.Gpu.AdapterLuid == Vendor.Gpu.AdapterLuid)
         ?? all.FirstOrDefault(a => _known is { } k ? (a.Gpu.Vendor, a.DeviceId, a.SubSysId) == (k.Gpu.Vendor, k.DeviceId, k.SubSysId)
                                                    : (a.Gpu.Vendor, a.Gpu.Name) == (Vendor.Vendor, Vendor.Gpu.Name));
-
-    /// <summary>The adapter <c>Settings.GpuChoice</c> names, when DXGI lists it and it is the vendor the running backend was
-    /// built for: a choice switched to another vendor while the app runs isn't followed (nothing swaps a backend in place,
-    /// so the adapter is chosen at start-up and Settings says a restart is needed), and <see cref="Followed"/> falls back to
-    /// the LUID and driver-id match.</summary>
-    DxgiAdapter? SavedChoice(IReadOnlyList<DxgiAdapter> all) =>
-        GpuBackends.Chosen(all, Settings.GpuChoice) is { } c && c.Gpu.Vendor == Vendor.Vendor ? c : null;
 
     /// <summary>Background runs (scheduled re-warm, <c>compile --idle</c>): idle priority, Settings.BackgroundThreads, and
     /// pause while another discovered game is running if Settings.PauseWhileGaming (a warm always stops while its own

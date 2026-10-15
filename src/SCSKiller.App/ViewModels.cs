@@ -1330,8 +1330,8 @@ public sealed class SettingsVm : Bindable
         + "所选显卡若被禁用或拔除，会自动回退到显存最多的那块。";
     /// <summary>Set when a saved choice isn't the adapter this process is already compiling for: the adapter, its caches,
     /// the warm exe and the shared packs are all picked at start-up (<see cref="ScsKiller.CreateDefault"/>), so a change
-    /// takes effect at the next start. Only the automatic rule's own pick is silent: nothing was overruled.</summary>
-    public string? GpuNote => S.GpuChoice is { Length: > 0 } && V.Gpu.AdapterLuid != gpuChoices[gpuIndex].Luid
+    /// takes effect at the next start, including a return to automatic selection.</summary>
+    public string? GpuNote => V.Gpu.AdapterLuid != gpuChoices[gpuIndex].Luid
         ? $"将在下次启动 SCSKiller 时生效；本次编译仍用 {V.Gpu.Name}。"
         : null;
     public bool HasGpuNote => GpuNote != null;

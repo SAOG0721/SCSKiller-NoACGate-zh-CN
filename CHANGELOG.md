@@ -14,6 +14,8 @@ All notable changes to the SCSKiller app and command line. Versions follow [Sema
   LUID, which the OS reassigns on every boot. Auto keeps the old rule, and a chosen card that isn't in the machine
   falls back to it. Restart SCSKiller after changing it: the vendor back-end, its driver cache, the warm executable
   and the community package folder are all derived from the choice.
+- GPU selection stays on the running adapter until restart, including switches between cards of the same vendor.
+  Reordered duplicate DXGI entries keep the current LUID, and returning to Auto also shows the restart notice when needed.
 
 ### Recorder and anti-cheat
 

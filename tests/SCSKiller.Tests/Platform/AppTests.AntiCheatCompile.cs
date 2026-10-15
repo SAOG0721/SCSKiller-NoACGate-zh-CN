@@ -103,6 +103,7 @@ public partial class AppTests
         WriteRecording(Path.Combine(k.Store.GameDir(_game.Id), "recording.db"));
         Assert.Equal(GameStatus.Ready, (await k.ScanAsync(default)).Single().Status);   // what the library shows
         await WarmOnce(k, _game.Id);                                                    // what the queue does about it
+        await k.RecordingMigration.WaitAsync(TimeSpan.FromSeconds(10));
         Assert.Equal(GameStatus.Warmed, k.Games.Single().Status);
     }
 
@@ -123,6 +124,7 @@ public partial class AppTests
         WriteRecording(Path.Combine(k.Store.GameDir(_game.Id), "recording.db"));
         await k.ScanAsync(default);
         await WarmOnce(k, _game.Id);
+        await k.RecordingMigration.WaitAsync(TimeSpan.FromSeconds(10));
         Assert.Equal(GameStatus.Warmed, k.Games.Single().Status);
         Assert.Null(k.Store.LoadGame(_game.Id).WarmedLayer);   // an anti-cheat install: the warm stages no layer
 
