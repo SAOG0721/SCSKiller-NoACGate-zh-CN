@@ -33,8 +33,9 @@
 - [x] 首次欢迎内容改为内置中文 fork 说明，避免上游远程欢迎文案覆盖风险提示；向上游发送匿名活跃检查改为默认关闭，设置页说明发送去向。关于页的源码链接直接打开本 fork 的 GitHub，不再把 Patreon 令牌发往 GitHub。
 - [ ] 首次发布前配置本 fork 自己的更新签名与版本渠道，并审查仍指向上游服务的社区分享/内容入口。
 - [x] 窗口标题已标明 NoACGate 中文版。
-- [ ] 便携版目录、ZIP、发布标题使用 fork 名称。GitHub Actions 工作流改动因凭据缺少 `workflow` 权限仍留本地，不作为首个便携预览版的发布通道；以后使用 CI 发布时再处理权限和标签验证。
-- [ ] 首个便携预览版采用独立版本号 `v1.2.5-noacgate.1`，未签名且不启用自动更新。Velopack 安装包 ID、独立签名密钥、更新渠道及与原版安装程序的共存验证属于将来提供安装版的任务。
+- [x] 便携版目录、ZIP、发布标题使用 fork 名称。GitHub Actions 工作流改动因凭据缺少 `workflow` 权限仍留本地，不作为首个便携预览版的发布通道；以后使用 CI 发布时再处理权限和标签验证。
+- [x] 首个便携预览版采用独立版本号 `v1.2.5-noacgate.1`，未签名且不启用自动更新。
+- [ ] Velopack 安装包 ID、独立签名密钥、更新渠道及与原版安装程序的共存验证属于将来提供安装版的任务。
 
 ## 4. 上游链接与自动联网入口（补充）
 
@@ -77,14 +78,16 @@
 
 - [x] 从已验证的 `2f8b817` Release 配置、本机运行时依赖版生成 `dist\SCSKiller-NoACGate-zh-CN-local-Release-minimal.zip`：25,600,349 字节、116 个文件，SHA-256 `31a1cba2808ea6365445d8c0dba67db36ace98e9354811e04b592c44fdfbd9cf`。这是未签名、未发布 GitHub 的本地分发包；内嵌版本仍为 `0.0.0-internal.0+2f8b817`。相邻的 `.receipt.json` 记录包内容和验证结果。
 - [x] 仅排除 `Microsoft.Web.WebView2.Core.dll`、`Microsoft.Web.WebView2.Core.Projection.dll`、`WebView2Loader.dll`，相对 119 文件版节省约 0.52 MiB ZIP。源码没有内嵌 WebView 控件，Patreon 登录通过系统浏览器；不过 `Microsoft.WinUI.dll` 静态引用 WebView2 投影，因此这项裁剪只对当前功能和测试过的路径成立。独立解压后，WinUI 假数据全页截图退出码 0、生成 229 张 PNG，CLI `--help` 退出码 0；10 个关键文件与 119 文件版哈希一致。没有实测在线登录、真实游戏或未来新增 WebView 控件。
-- [ ] 打包脚本现已提供 `-NoWebView`，首个便携预览包需从准确源码提交重新构建并复核清单、启动与 CLI。公开发布前，仍需人工审核 Draft；实机游戏与在线登录的结果不能由现有隔离测试代替。
+- [x] 打包脚本提供 `-NoWebView`；首个便携预览包已从准确源码提交重新构建，复核清单、启动与 CLI。
+- [ ] 公开发布前由用户人工审核 Draft；实机游戏与在线登录的结果不能由现有隔离测试代替。
 
 ## 7. 首个预览版 Draft 准备
 
 - [x] 默认 README 改为面向用户的中文说明，签名状态不再沿用上游政策；原版赞助入口从 fork 仓库移除。
 - [x] `docs/RELEASE_NOTES_v1.2.5-noacgate.1.md` 提供面向用户的中英双语发布说明、前置运行时、安装步骤和反作弊风险。
-- [ ] 用 `-NoOodle -FrameworkDependent -NoWebView -Version 1.2.5-noacgate.1` 从干净提交生成可复现 ZIP，核对包内源码提交、版本、文件哈希与启动结果。
-- [ ] 将不含 `.github/workflows` 改动的源码同步到 fork 默认分支；创建 Draft + Pre-release，上传主 ZIP 和校验文件，人工审核前不发布。
+- [x] 用 `-NoOodle -FrameworkDependent -NoWebView -Version 1.2.5-noacgate.1` 从干净提交 `b238c0c03993e0f925addf82bea2e84486324d5f` 生成 ZIP。包内 117 个文件与清单哈希一致；独立解压版 CLI 中文帮助退出码 0，WinUI 假数据截图退出码 0 并生成 229 张 PNG，已检查窄窗口反作弊选择页。ZIP 为 25,604,818 字节，SHA-256 `0342402968e7eeaf171e25bfdeb742c641f87e9f4df6d4232f70aa2957326871`。
+- [x] 不含 `.github/workflows` 改动的源码已同步到 fork 默认分支和开发分支。GitHub Draft + Pre-release ID `413311171` 指向上述构建提交；已上传 `SCSKiller-NoACGate-zh-CN.zip` 和 `SHA256SUMS.txt`，远端附件大小、ZIP SHA-256、正文与本地相符。
+- [ ] 用户人工审核 Draft 后再决定是否公开发布；当前保持 `draft=true`，不推送会触发工作流的标签。
 - 手动清理建议：新 ZIP 已不含上述 3 个二进制文件；如果保留之前解压的 119 文件版而希望手动裁剪，只针对该版顶层的这 3 个文件。`notices\WebView2-NOTICE.txt` 和第三方声明保留。较旧的 fork 部署目录、旧 ZIP、旧解压目录及临时构建目录见第 5 节的待清理条目；在决定是否保留完整包作回退前，先不要删除当前固定部署目录或 `I:` 盘原版。
 
 ## 已确认的源码入口
