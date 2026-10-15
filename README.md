@@ -10,7 +10,7 @@
 2. 在 Windows x64 电脑上安装 [.NET 10 Runtime（x64）](https://dotnet.microsoft.com/download/dotnet/10.0)和 [Windows App SDK Runtime 2.5.1 或更新的兼容版本（x64）](https://learn.microsoft.com/windows/apps/windows-app-sdk/downloads)。压缩包不包含这两项运行时。
 3. 将 ZIP **完整解压到新目录**，运行其中的 `SCSKiller.exe`。请勿在压缩包内直接运行，也不要只复制单个 EXE。GitHub 自动生成的 `Source code` 压缩包不是可运行程序。
 
-本分支目前只提供便携 ZIP，没有安装程序，自动更新保持关闭。升级时先退出正在运行的程序，再将新 ZIP 完整解压到另一目录。应用数据默认保存在 `%LOCALAPPDATA%\SCSKiller-NoACGate-zh-CN`；使用程序旁的 `data` 目录时则进入便携数据模式。
+本分支目前只提供便携 ZIP，没有安装程序，自动更新保持关闭。升级时先退出正在运行的程序，再将新 ZIP 完整解压到另一目录。本 ZIP 的应用数据保存在 `%LOCALAPPDATA%\SCSKiller-NoACGate-zh-CN`，保留该目录即可继续使用已有设置和录制；仅在 EXE 旁新建 `data` 目录不会改变数据位置。
 
 ## 使用
 

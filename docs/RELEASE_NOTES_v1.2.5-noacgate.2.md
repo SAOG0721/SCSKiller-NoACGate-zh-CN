@@ -16,7 +16,7 @@
 
 1. 系统须为 Windows x64。先安装 [.NET 10 Runtime（x64）](https://dotnet.microsoft.com/download/dotnet/10.0)和 [Windows App SDK Runtime 2.5.1 或更新的兼容版本（x64）](https://learn.microsoft.com/windows/apps/windows-app-sdk/downloads)。这两项运行时不包含在 ZIP 内。
 2. 从通知区域菜单完全退出 SCSKiller，将 ZIP **完整解压到新目录**，再运行其中的 `SCSKiller.exe`。不要只替换单个 EXE；建议保留旧目录以便回退。
-3. 默认数据目录仍为 `%LOCALAPPDATA%\SCSKiller-NoACGate-zh-CN`。若使用程序旁的 `data` 目录，请在退出程序后将整个 `data` 目录复制到新版本目录，保留原件。
+3. 本 ZIP 的数据目录仍为 `%LOCALAPPDATA%\SCSKiller-NoACGate-zh-CN`，保留该目录即可继续使用已有设置和录制；仅在 EXE 旁创建 `data` 目录不会改变数据位置。若此前自行采用带 `.portable` 标记的目录布局，请同时保留标记所在目录及其下完整的 `data` 目录。
 
 这是未签名的精简便携包，没有安装程序，自动更新继续关闭。包内不含 Oodle DLL 和 WebView2 的三个二进制文件；部分游戏档案所需的 Oodle 可在首次使用时下载，账户登录使用系统浏览器。原版和本分支不要同时向同一游戏目录安装录制器。
 
@@ -52,7 +52,7 @@ Download the complete **`SCSKiller-NoACGate-zh-CN.zip`** and verify it with `SHA
 
 1. On Windows x64, install [.NET 10 Runtime (x64)](https://dotnet.microsoft.com/download/dotnet/10.0) and [Windows App SDK Runtime 2.5.1 or a newer compatible version (x64)](https://learn.microsoft.com/windows/apps/windows-app-sdk/downloads). Neither runtime is bundled.
 2. Fully exit SCSKiller from its notification-area menu, extract the **entire ZIP into a new directory**, then run `SCSKiller.exe`. Keep the previous directory for rollback; do not replace only the EXE.
-3. The default data directory remains `%LOCALAPPDATA%\SCSKiller-NoACGate-zh-CN`. For portable data mode, copy the entire `data` directory beside the old executable into the new directory while the app is closed, preserving the original.
+3. This ZIP continues to use `%LOCALAPPDATA%\SCSKiller-NoACGate-zh-CN` for settings and recordings; preserve that directory. Creating a `data` directory beside the EXE alone does not change the data location. If you previously arranged a layout with a `.portable` marker, preserve the marker's directory and its entire `data` subdirectory together.
 
 This unsigned minimal portable package has no installer or automatic updates. It omits Oodle and three WebView2 binaries; Oodle may be downloaded when needed, and account sign-in uses the system browser. Do not let the original app and this fork install recorders into the same game directory at once.
 
