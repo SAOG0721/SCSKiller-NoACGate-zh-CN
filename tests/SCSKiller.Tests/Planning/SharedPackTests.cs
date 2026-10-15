@@ -119,7 +119,7 @@ public class SharedPackTests(ITestOutputHelper output)
 
         serve = [.. body, 0];   // not what the manifest names
         Assert.Null(await community.DownloadPackAsync(entry, dll, image, shared, amd: false));
-        Assert.Contains("checksum", community.Problem);
+        Assert.Contains("校验失败", community.Problem);
         // a pack carrying anything but PSOs and their root signatures is refused
         var records = Records(x, x.A);
         serve = HashOnly.Compress([.. records, new PsoDb.Rec('L', Convert.FromHexString(records[^1].Key))]);
@@ -198,7 +198,7 @@ public class SharedPackTests(ITestOutputHelper output)
         await body.Reading.Task.WaitAsync(TimeSpan.FromSeconds(10));
         clock.Advance(community.BodyIdle);   // the body's idle time, on the community's clock
         Assert.Null(await download.WaitAsync(TimeSpan.FromSeconds(10)));
-        Assert.Contains("didn't answer in time", community.Problem);
+        Assert.Contains("响应超时", community.Problem);
         Assert.Null(await community.DownloadPackAsync(entry, dll, image, new MiddlewarePacks(x.Shared), amd: false));   // backing off
         Assert.Single(fake.Log);
     }

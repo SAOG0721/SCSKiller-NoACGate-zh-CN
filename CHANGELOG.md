@@ -39,6 +39,11 @@ All notable changes to the SCSKiller app and command line. Versions follow [Sema
   Waves with ReShade and RenoDX). The verdict now comes from the scan's own cache, and a game the scan hasn't read
   either is read from its files instead of being assumed clean.
 
+### Thanks
+
+- Thanks to [@ohjoij-ys](https://github.com/ohjoij-ys) for contributing GPU selection and the three recording/compilation
+  fixes in [PR #1](https://github.com/SAOG0721/SCSKiller-NoACGate-zh-CN/pull/1), and for sharing local dual-GPU verification results.
+
 ## [1.2.5] - 2026-10-10
 
 ### Faster and steadier

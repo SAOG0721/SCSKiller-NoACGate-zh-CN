@@ -389,19 +389,23 @@ public class UpdateTests : IDisposable
     [Fact]
     public void Checks_RunHourly() => Assert.Equal(TimeSpan.FromHours(1), UpdateFeeds.CheckEvery);
 
-    /// <summary>The App project is WinUI and has no test seam: its source says that "Check for updates" and the Library's
-    /// refresh download what they find.</summary>
+    /// <summary>The WinUI fork keeps update checks disabled, including manual checks, and does not attach the upstream
+    /// account/update callback to a library refresh.</summary>
     [Fact]
-    public void ManualCheck_AndLibraryRefresh_Download()
+    public void Fork_updates_stay_disabled_for_manual_checks_and_library_refresh()
     {
         var app = Path.Combine(TestEnv.RepoRoot, "src", "SCSKiller.App");
         var updater = File.ReadAllText(Path.Combine(app, "Updater.cs"));
-        Assert.Matches(@"public static async Task CheckAsync\(bool backToStable = false\)", updater);
+        Assert.Contains("public const bool ForkUpdatesEnabled = false;", updater);
+        Assert.Contains("public static bool Installed => ForkUpdatesEnabled && installed.Value;", updater);
+        Assert.Matches(@"public static void Start\(\)\s*\{\s*if \(!Installed\) return;", updater);
+        Assert.Matches(@"public static async Task CheckAsync\(bool backToStable = false\)\s*\{\s*if \(!Installed\) return;", updater);
         var now = System.Text.RegularExpressions.Regex.Match(updater, @"public static Task CheckNowAsync\(\)\s*\{(.*?)\r?\n    \}",System.Text.RegularExpressions.RegexOptions.Singleline);
         Assert.True(now.Success);
+        Assert.StartsWith("if (!Installed) return Task.CompletedTask;", now.Groups[1].Value.TrimStart());
         Assert.Contains("return CheckAsync();", now.Groups[1].Value);
         Assert.Contains("_ = Updater.CheckNowAsync();", File.ReadAllText(Path.Combine(app, "Pages", "AboutPage.xaml.cs")));
-        Assert.Matches(@"real\.UserFetch = async \(\) => \{ await Account\.RefreshAsync\(\); await Updater\.CheckAsync\(\); \};", File.ReadAllText(Path.Combine(app, "App.xaml.cs")));
+        Assert.DoesNotMatch(@"real\.UserFetch\s*=", File.ReadAllText(Path.Combine(app, "App.xaml.cs")));
     }
 
     /// <summary>The App's source: the start and the tray's Quit both ask <see cref="AutoInstall.HeldBack"/> before applying,
